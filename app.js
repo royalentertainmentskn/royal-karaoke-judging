@@ -549,92 +549,186 @@ function live() {
   `;
 }
 
-function results() {
-  let r = cs()
-    .map(x => {
-      let a = Object.values(S()[x.id] || {});
+function results() ```javascript
+function results(){
+  const rows = Object.entries(D.contestants || {}).map(([id,c])=>{
+    const scores = Object.values((D.scores || {})[id] || {});
+    const submitted = scores.filter(s=>s && s.submitted);
 
-      let avg = a.length
-        ? a.reduce((n, q) => n + q.total, 0) / a.length
-        : 0;
+    const avg = submitted.length
+      ? submitted.reduce((a,s)=>a+(Number(s.total)||0),0) / submitted.length
+      : 0;
 
-      return {
-        ...x,
-        n: a.length,
-        avg
+    return {
+      id,
+      ...c,
+      submitted: submitted.length,
+      avg
+    };
+  });
+
+  const completeRows = rows.filter(r=>r.submitted === J.length);
+
+  // Individual category winners
+  const bestMale = completeRows
+    .filter(r=>r.category === "Male")
+    .sort((a,b)=>b.avg-a.avg)[0];
+
+  const bestFemale = completeRows
+    .filter(r=>r.category === "Female")
+    .sort((a,b)=>b.avg-a.avg)[0];
+
+  const bestDuet = completeRows
+    .filter(r=>r.category === "Duet")
+    .sort((a,b)=>b.avg-a.avg)[0];
+
+  // ---------------------------------------------------------
+  // BEST OVERALL TEAM
+  // Each completed performance contributes its FINAL AVERAGE
+  // to the team total.
+  // ---------------------------------------------------------
+  const teamTotals = {};
+
+  completeRows.forEach(r=>{
+    if(!r.team) return;
+
+    if(!teamTotals[r.team]){
+      teamTotals[r.team] = {
+        team: r.team,
+        total: 0,
+        performances: 0
       };
-    })
-    .sort((a, b) => b.avg - a.avg);
+    }
 
-  let best = c =>
-    r.find(x => x.category === c && x.n);
+    teamTotals[r.team].total += r.avg;
+    teamTotals[r.team].performances++;
+  });
 
-  let boxes = [
-    ["Overall Winner", r.find(x => x.n)],
-    ["Best Male", best("Male")],
-    ["Best Female", best("Female")],
-    ["Best Duet", best("Duet")]
-  ];
+  const teamRanking = Object.values(teamTotals)
+    .sort((a,b)=>b.total-a.total);
+
+  const bestTeam = teamRanking[0];
+
+  const winnerBox = (title, item, extra="") => item
+    ? `<div class="card">
+         <h3>${title}</h3>
+         <div class="winner">${E(item.name)}</div>
+         <div>${extra}</div>
+         <strong>${item.avg.toFixed(2)} / 100</strong>
+       </div>`
+    : `<div class="card">
+         <h3>${title}</h3>
+         <div>No completed result yet</div>
+       </div>`;
+
+  const teamBox = bestTeam
+    ? `<div class="card">
+         <h3>🏆 Best Overall Team</h3>
+         <div class="winner">${E(bestTeam.team)}</div>
+         <div>${bestTeam.performances} completed performance${bestTeam.performances===1?"":"s"}</div>
+         <strong>${bestTeam.total.toFixed(2)} points</strong>
+       </div>`
+    : `<div class="card">
+         <h3>🏆 Best Overall Team</h3>
+         <div>No completed team result yet</div>
+       </div>`;
 
   return `
-    <h1>Results</h1>
+    ${head("Results")}
 
-    <div class="grid">
-      ${boxes
-        .map(
-          ([t, w]) =>
-            `<div class="card winner">
-              <span class="muted">${t}</span>
+    <section class="grid">
+      ${winnerBox("Overall Winner",
+        completeRows.slice().sort((a,b)=>b.avg-a.avg)[0] || null)}
 
-              <h2>${E(w?.name || "—")}</h2>
+      ${winnerBox("Best Male", bestMale)}
 
-              <div class="big">
-                ${w ? w.avg.toFixed(2) : "—"}
-              </div>
+      ${winnerBox("Best Female", bestFemale)}
 
-              ${w ? "/100" : ""}
-            </div>`
-        )
-        .join("")}
-    </div>
+      ${winnerBox("Best Duet", bestDuet)}
 
-    <div class="card table-wrap">
+      ${teamBox}
+    </section>
+
+    <section class="card">
+      <h3>🏆 Team Ranking</h3>
+
+      ${
+        teamRanking.length
+        ? `<table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Team</th>
+                <th>Completed Performances</th>
+                <th>Team Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${teamRanking.map((t,i)=>`
+                <tr>
+                  <td>${i+1}</td>
+                  <td><strong>${E(t.team)}</strong></td>
+                  <td>${t.performances}</td>
+                  <td><strong>${t.total.toFixed(2)}</strong></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>`
+        : `<p>No completed team performances yet.</p>`
+      }
+    </section>
+
+    <section class="card">
+      <h3>Performance Results</h3>
+
       <table>
-        <tr>
-          <th>Rank</th>
-          <th>Name</th>
-          <th>Category</th>
-          <th>Team</th>
-          <th>Judges</th>
-          <th>Average</th>
-        </tr>
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Contestant</th>
+            <th>Category</th>
+            <th>Team</th>
+            <th>Song</th>
+            <th>Judges</th>
+            <th>Final Score</th>
+          </tr>
+        </thead>
 
-        ${r
-          .map(
-            (x, i) =>
-              `<tr>
-                <td>${x.n ? i + 1 : "—"}</td>
-                <td>
-                  ${E(x.name)}
-                  ${
-                    x.name2
-                      ? ` & ${E(x.name2)}`
-                      : ""
-                  }
-                </td>
-                <td>${E(x.category)}</td>
-                <td>${E(x.team || "—")}</td>
-                <td>${x.n}</td>
-                <td>
-                  ${x.n ? x.avg.toFixed(2) : "—"}
-                </td>
-              </tr>`
-          )
-          .join("")}
+        <tbody>
+          ${
+            rows
+              .slice()
+              .sort((a,b)=>b.avg-a.avg)
+              .map(r=>`
+                <tr>
+                  <td>${E(r.number || "")}</td>
+                  <td>
+                    <strong>${E(r.name || "")}</strong>
+                    ${r.category==="Duet" && r.name2
+                      ? `<br>& ${E(r.name2)}`
+                      : ""}
+                  </td>
+                  <td>${E(r.category || "")}</td>
+                  <td>${E(r.team || "")}</td>
+                  <td>${E(r.song || "")}</td>
+                  <td>${r.submitted}/${J.length}</td>
+                  <td>
+                    ${
+                      r.submitted === J.length
+                      ? `<strong>${r.avg.toFixed(2)}</strong>`
+                      : `Pending`
+                    }
+                  </td>
+                </tr>
+              `).join("")
+          }
+        </tbody>
       </table>
-    </div>
+    </section>
   `;
 }
+```
+
 
 function judge() {
   let a = A();
