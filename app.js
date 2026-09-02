@@ -31,12 +31,26 @@ const J = {
   j5: { no: 5, name: "Judge 5" }
 };
 
+/*
+  Default teams.
+
+  These are only used when the competition does not yet
+  have teams stored in Firebase.
+*/
+const DEFAULT_TEAMS = {
+  t1: "SKN Melodies",
+  t2: "Island Voices",
+  t3: "Kittitian Stars",
+  t4: "Nevis Voices"
+};
+
 const DEMO = {
   c1: {
     number: 1,
     name: "Sarah Jones",
     category: "Female",
     song: "Example Song",
+    team: "SKN Melodies",
     order: 1
   },
   c2: {
@@ -44,6 +58,7 @@ const DEMO = {
     name: "John Smith",
     category: "Male",
     song: "Example Song",
+    team: "Island Voices",
     order: 2
   },
   c3: {
@@ -51,6 +66,7 @@ const DEMO = {
     name: "Mary & James",
     category: "Duet",
     song: "Example Song",
+    team: "SKN Melodies",
     order: 3
   },
   c4: {
@@ -58,6 +74,7 @@ const DEMO = {
     name: "Team SKN",
     category: "Team",
     song: "Example Song",
+    team: "Kittitian Stars",
     order: 4
   }
 };
@@ -97,6 +114,41 @@ const A = () => D.contestants?.[D.active];
 const T = () =>
   C.reduce((n, [k]) => n + (+draft[k] || 0), 0);
 
+/*
+  Return the teams currently stored in Firebase.
+  If no teams exist yet, use the default teams.
+*/
+const teams = () => {
+  if (D.teams && Object.keys(D.teams).length) {
+    return Object.entries(D.teams)
+      .map(([id, name]) => ({
+        id,
+        name:
+          typeof name === "string"
+            ? name
+            : name?.name || ""
+      }))
+      .filter(x => x.name);
+  }
+
+  return Object.entries(DEFAULT_TEAMS).map(
+    ([id, name]) => ({ id, name })
+  );
+};
+
+/*
+  Create the team dropdown used during registration.
+*/
+const teamOptions = () =>
+  teams()
+    .map(
+      t =>
+        `<option value="${E(t.name)}">
+          ${E(t.name)}
+        </option>`
+    )
+    .join("");
+
 async function start() {
   try {
     await signInAnonymously(au);
@@ -123,8 +175,24 @@ async function start() {
           active: "c1",
           contestants: DEMO,
           judges: J,
-          scores: {}
+          scores: {},
+          teams: DEFAULT_TEAMS
         });
+      }
+
+      /*
+        If an existing competition does not yet have
+        teams, add the default team list without
+        disturbing the rest of the event.
+      */
+      if (
+        D.name &&
+        !D.teams
+      ) {
+        await set(
+          ref(db, "event/teams"),
+          DEFAULT_TEAMS
+        );
       }
 
       render();
@@ -209,6 +277,10 @@ function dash() {
             ? `
               <div class="big">#${a.number}</div>
               <h2>${E(a.name)}</h2>
+              <p>
+                ${E(a.category || "")}
+                ${a.team ? ` · ${E(a.team)}` : ""}
+              </p>
             `
             : "None"
         }
@@ -230,7 +302,9 @@ function dash() {
               `<option value="${x.id}" ${
                 x.id === D.active ? "selected" : ""
               }>
-                #${x.number} — ${E(x.name)} (${x.category})
+                #${x.number} — ${E(x.name)}
+                (${E(x.category)})
+                ${x.team ? ` — ${E(x.team)}` : ""}
               </option>`
           )
           .join("")}
@@ -265,26 +339,47 @@ function dash() {
 
 function cont() {
   return `
-    <h1>Contestants</h1>
+    <h1>Contestant Registration</h1>
 
     <div class="card">
+      <h2>Register Performance</h2>
+
+      <p class="muted">
+        Every contestant or duet must be assigned to a team.
+        The team assignment will be used later to calculate
+        the Best Overall Team.
+      </p>
+
       <div class="form-grid">
+
         <input
           id="cn"
           type="number"
-          placeholder="Number"
-        >
-
-        <input
-          id="name"
-          placeholder="Name"
+          placeholder="Performance Number"
         >
 
         <select id="cat">
-          <option>Male</option>
-          <option>Female</option>
-          <option>Duet</option>
-          <option>Team</option>
+          <option value="Male">Individual — Male</option>
+          <option value="Female">Individual — Female</option>
+          <option value="Duet">Duet</option>
+        </select>
+
+        <input
+          id="name"
+          placeholder="Contestant Name"
+        >
+
+        <input
+          id="name2"
+          placeholder="Second Contestant Name (Duet only)"
+          style="display:none"
+        >
+
+        <select id="team">
+          <option value="">
+            Select Team
+          </option>
+          ${teamOptions()}
         </select>
 
         <input
@@ -295,23 +390,70 @@ function cont() {
         <input
           id="ord"
           type="number"
-          placeholder="Order"
+          placeholder="Performance Order"
         >
+
       </div>
 
       <br>
 
       <button id="add" class="primary">
-        ADD CONTESTANT
+        REGISTER PERFORMANCE
       </button>
     </div>
 
+    <div class="card">
+      <h2>Teams</h2>
+
+      <div class="form-grid">
+        <input
+          id="newTeam"
+          placeholder="Enter new team name"
+        >
+
+        <button id="addTeam" class="primary">
+          ADD TEAM
+        </button>
+      </div>
+
+      <br>
+
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Team</th>
+            <th>Registered Performances</th>
+          </tr>
+
+          ${teams()
+            .map(
+              t => `
+                <tr>
+                  <td>${E(t.name)}</td>
+                  <td>
+                    ${
+                      cs().filter(
+                        x => x.team === t.name
+                      ).length
+                    }
+                  </td>
+                </tr>
+              `
+            )
+            .join("")}
+        </table>
+      </div>
+    </div>
+
     <div class="card table-wrap">
+      <h2>Registered Performances</h2>
+
       <table>
         <tr>
           <th>#</th>
-          <th>Name</th>
+          <th>Contestant(s)</th>
           <th>Category</th>
+          <th>Team</th>
           <th>Song</th>
           <th></th>
         </tr>
@@ -321,9 +463,24 @@ function cont() {
             x =>
               `<tr>
                 <td>${x.number}</td>
-                <td>${E(x.name)}</td>
-                <td>${x.category}</td>
+
+                <td>
+                  ${E(x.name)}
+                  ${
+                    x.name2
+                      ? ` & ${E(x.name2)}`
+                      : ""
+                  }
+                </td>
+
+                <td>${E(x.category)}</td>
+
+                <td>
+                  ${E(x.team || "No Team")}
+                </td>
+
                 <td>${E(x.song)}</td>
+
                 <td>
                   <button
                     class="del danger"
@@ -355,6 +512,17 @@ function live() {
             : "No active contestant"
         }
       </h2>
+
+      ${
+        a
+          ? `
+            <p>
+              ${E(a.category || "")}
+              ${a.team ? ` · Team: ${E(a.team)}` : ""}
+            </p>
+          `
+          : ""
+      }
     </div>
 
     <div class="grid">
@@ -405,8 +573,7 @@ function results() {
     ["Overall Winner", r.find(x => x.n)],
     ["Best Male", best("Male")],
     ["Best Female", best("Female")],
-    ["Best Duet", best("Duet")],
-    ["Best Team", best("Team")]
+    ["Best Duet", best("Duet")]
   ];
 
   return `
@@ -437,6 +604,7 @@ function results() {
           <th>Rank</th>
           <th>Name</th>
           <th>Category</th>
+          <th>Team</th>
           <th>Judges</th>
           <th>Average</th>
         </tr>
@@ -446,8 +614,16 @@ function results() {
             (x, i) =>
               `<tr>
                 <td>${x.n ? i + 1 : "—"}</td>
-                <td>${E(x.name)}</td>
-                <td>${x.category}</td>
+                <td>
+                  ${E(x.name)}
+                  ${
+                    x.name2
+                      ? ` & ${E(x.name2)}`
+                      : ""
+                  }
+                </td>
+                <td>${E(x.category)}</td>
+                <td>${E(x.team || "—")}</td>
                 <td>${x.n}</td>
                 <td>
                   ${x.n ? x.avg.toFixed(2) : "—"}
@@ -512,9 +688,21 @@ function judge() {
 
         <h1>${E(a.name)}</h1>
 
+        ${
+          a.name2
+            ? `<h2>& ${E(a.name2)}</h2>`
+            : ""
+        }
+
         <p>
-          ${E(a.song || "")} · ${a.category}
+          ${E(a.song || "")} · ${E(a.category)}
         </p>
+
+        ${
+          a.team
+            ? `<p><b>Team: ${E(a.team)}</b></p>`
+            : ""
+        }
       </div>
 
       <div class="card">
@@ -713,6 +901,31 @@ function wire() {
       )
     );
 
+  /*
+    Show/hide the second contestant field
+    when Duet is selected.
+  */
+  document
+    .getElementById("cat")
+    ?.addEventListener("change", e => {
+      let second =
+        document.getElementById("name2");
+
+      if (!second) return;
+
+      second.style.display =
+        e.target.value === "Duet"
+          ? "block"
+          : "none";
+
+      if (e.target.value !== "Duet") {
+        second.value = "";
+      }
+    });
+
+  /*
+    Register a new contestant or duet.
+  */
   document
     .getElementById("add")
     ?.addEventListener("click", async () => {
@@ -725,34 +938,126 @@ function wire() {
           .value
           .trim();
 
+      let category =
+        document.getElementById("cat").value;
+
+      let name2 =
+        document
+          .getElementById("name2")
+          ?.value
+          .trim() || "";
+
+      let team =
+        document.getElementById("team").value;
+
+      let song =
+        document
+          .getElementById("song")
+          .value
+          .trim();
+
+      let order =
+        +document.getElementById("ord").value ||
+        n;
+
       if (!n || !name) {
         return alert(
-          "Enter contestant number and name."
+          "Enter performance number and contestant name."
+        );
+      }
+
+      if (!team) {
+        return alert(
+          "Please select a team."
+        );
+      }
+
+      if (
+        category === "Duet" &&
+        !name2
+      ) {
+        return alert(
+          "Enter the second contestant's name for a duet."
         );
       }
 
       let id = "c" + Date.now();
+
+      let contestant = {
+        number: n,
+        name,
+        category,
+        team,
+        song,
+        order
+      };
+
+      if (category === "Duet") {
+        contestant.name2 = name2;
+      }
 
       await set(
         ref(
           db,
           `event/contestants/${id}`
         ),
-        {
-          number: n,
-          name,
-          category:
-            document.getElementById("cat").value,
-          song:
-            document
-              .getElementById("song")
-              .value
-              .trim(),
-          order:
-            +document.getElementById("ord").value ||
-            n
-        }
+        contestant
       );
+
+      /*
+        Clear registration fields after
+        successful registration.
+      */
+      document.getElementById("cn").value = "";
+      document.getElementById("name").value = "";
+      document.getElementById("name2").value = "";
+      document.getElementById("song").value = "";
+      document.getElementById("ord").value = "";
+    });
+
+  /*
+    Add a new team to Firebase.
+  */
+  document
+    .getElementById("addTeam")
+    ?.addEventListener("click", async () => {
+      let input =
+        document.getElementById("newTeam");
+
+      let name =
+        input.value.trim();
+
+      if (!name) {
+        return alert(
+          "Enter a team name."
+        );
+      }
+
+      let existing =
+        teams().some(
+          t =>
+            t.name.toLowerCase() ===
+            name.toLowerCase()
+        );
+
+      if (existing) {
+        return alert(
+          "That team already exists."
+        );
+      }
+
+      let id =
+        "t" + Date.now();
+
+      await set(
+        ref(
+          db,
+          `event/teams/${id}`
+        ),
+        name
+      );
+
+      input.value = "";
     });
 
   document.querySelectorAll(".del").forEach(b =>
