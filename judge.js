@@ -1,12 +1,11 @@
-import {
-  initializeApp
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 
 import {
   getDatabase,
   ref,
   set,
-  onValue
+  onValue,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 
 import {
@@ -16,429 +15,1212 @@ import {
 
 import { firebaseConfig } from "./firebase-config.js";
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
+/* =========================================================
+   ROYAL KARAOKE SKN
+   JUDGE-ONLY SCORING SYSTEM
+   ========================================================= */
 
-const CRITERIA = [
-  { key: "voiceManagement", name: "Voice Management", max: 10 },
-  { key: "voiceTiming", name: "Voice Timing", max: 20 },
-  { key: "costume", name: "Costume", max: 5 },
-  { key: "props", name: "Props", max: 5 },
-  { key: "performance", name: "Performance", max: 40 },
-  { key: "crowdResponse", name: "Crowd Response", max: 20 }
+const fb = initializeApp(firebaseConfig);
+const db = getDatabase(fb);
+const au = getAuth(fb);
+
+/* =========================================================
+   JUDGING CRITERIA
+   TOTAL = 100
+   ========================================================= */
+
+const C = [
+  ["voiceManagement", "Voice Management", 10],
+  ["voiceTiming", "Voice Timing", 20],
+  ["costume", "Costume", 5],
+  ["props", "Props", 5],
+  ["performance", "Performance", 40],
+  ["crowdResponse", "Crowd Response", 20]
 ];
 
-const JUDGES = {
-  1: "Judge 1",
-  2: "Judge 2",
-  3: "Judge 3",
-  4: "Judge 4",
-  5: "Judge 5"
+const MAX_TOTAL = C.reduce(
+  (total, item) => total + item[2],
+  0
+);
+
+/* =========================================================
+   JUDGES
+   ========================================================= */
+
+const J = {
+  j1: { no: 1, name: "Judge 1" },
+  j2: { no: 2, name: "Judge 2" },
+  j3: { no: 3, name: "Judge 3" },
+  j4: { no: 4, name: "Judge 4" },
+  j5: { no: 5, name: "Judge 5" }
 };
 
-let judgeNumber = null;
-let eventData = {};
-let currentScores = {};
-let submitted = false;
+/* =========================================================
+   APPLICATION STATE
+   ========================================================= */
 
-const appRoot = document.getElementById("app");
+const root = document.getElementById("app");
+
+let D = {};
+
+let judgeId = null;
+
+let draft = {};
+
+let draftPerformanceId = null;
+
+let submitting = false;
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+const E = value =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    c =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[c])
+  );
+
+/* =========================================================
+   GET JUDGE FROM URL
+   ========================================================= */
 
 function getJudgeFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const value = Number(params.get("judge"));
 
-  if (value >= 1 && value <= 5) {
-    return value;
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const number =
+    Number(
+      params.get("judge")
+    );
+
+  if (
+    number >= 1 &&
+    number <= 5
+  ) {
+
+    return `j${number}`;
+
   }
 
   return null;
 }
 
-function activeJudgeCount() {
-  const count = Number(eventData.judgeCount || 5);
-  return count === 3 ? 3 : 5;
+/* =========================================================
+   NUMBER OF JUDGES
+   ========================================================= */
+
+function judgeCount() {
+
+  const value =
+    Number(D.judgeCount);
+
+  return value === 3
+    ? 3
+    : 5;
 }
+
+/* =========================================================
+   CURRENT JUDGE
+   ========================================================= */
+
+function currentJudge() {
+
+  return J[judgeId] || null;
+
+}
+
+/* =========================================================
+   IS JUDGE ACTIVE?
+   ========================================================= */
 
 function isJudgeActive() {
-  return judgeNumber && judgeNumber <= activeJudgeCount();
+
+  const judge =
+    currentJudge();
+
+  if (!judge) {
+    return false;
+  }
+
+  return (
+    judge.no <=
+    judgeCount()
+  );
+
 }
 
-function activePerformance() {
-  return eventData.active || null;
+/* =========================================================
+   ACTIVE CONTESTANT
+   =========================================================
+
+   IMPORTANT:
+
+   Your existing app stores:
+
+   event.active = contestant ID
+
+   The actual contestant information is stored at:
+
+   event.contestants[event.active]
+
+   ========================================================= */
+
+function activeContestant() {
+
+  if (!D.active) {
+    return null;
+  }
+
+  return (
+    D.contestants?.[
+      D.active
+    ] || null
+  );
+
 }
 
-function totalScore(scores) {
-  return CRITERIA.reduce((total, item) => {
-    return total + Number(scores[item.key] || 0);
-  }, 0);
+/* =========================================================
+   CURRENT SCORES
+   ========================================================= */
+
+function scoreData() {
+
+  if (!D.active) {
+    return null;
+  }
+
+  if (!D.scores) {
+    return null;
+  }
+
+  return (
+    D.scores?.[
+      D.active
+    ]?.[
+      judgeId
+    ] || null
+  );
+
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+/* =========================================================
+   TEAM NAME
+   ========================================================= */
 
-function renderHeader() {
-  return `
-    <div class="header">
-      <h1>ROYAL KARAOKE SKN</h1>
-      <p>Championship Judging</p>
-      <div class="judge-badge">
-        ${escapeHtml(JUDGES[judgeNumber] || "Judge")}
-      </div>
-    </div>
-  `;
-}
+function getTeamName(contestant) {
 
-function renderWaiting(message = "Waiting for the Auditor to activate a performance.") {
-  appRoot.innerHTML = `
-    ${renderHeader()}
+  if (!contestant) {
+    return "";
+  }
 
-    <div class="card waiting">
-      <h2>WAITING</h2>
-      <p>${escapeHtml(message)}</p>
-    </div>
-  `;
-}
+  /*
+    New format:
+    contestant.team contains
+    the actual team name.
+  */
 
-function renderInactive() {
-  appRoot.innerHTML = `
-    <div class="header">
-      <h1>ROYAL KARAOKE SKN</h1>
-      <p>Judging Station</p>
-    </div>
+  if (
+    contestant.team
+  ) {
 
-    <div class="card waiting">
-      <h2>JUDGE NOT ACTIVE</h2>
-      <p>
-        This judge station is not currently active for this competition.
-      </p>
-    </div>
-  `;
-}
+    return contestant.team;
 
-function renderError(message) {
-  appRoot.innerHTML = `
-    <div class="header">
-      <h1>ROYAL KARAOKE SKN</h1>
-    </div>
+  }
 
-    <div class="card waiting">
-      <h2>JUDGE STATION ERROR</h2>
-      <p class="error">${escapeHtml(message)}</p>
-    </div>
-  `;
-}
+  /*
+    Backup for teamId format.
+  */
 
-function renderSubmitted(performance) {
-  const score = totalScore(currentScores);
+  if (
+    contestant.teamId &&
+    D.teams
+  ) {
 
-  appRoot.innerHTML = `
-    ${renderHeader()}
+    const team =
+      D.teams[
+        contestant.teamId
+      ];
 
-    <div class="card submitted">
-      <div class="performance-number">
-        PERFORMANCE #${escapeHtml(performance.number)}
-      </div>
+    if (
+      typeof team ===
+      "string"
+    ) {
 
-      <h2>Score Submitted</h2>
+      return team;
 
-      <div class="final-number">
-        ${score}
-      </div>
-
-      <p>
-        Your score has been recorded and locked.
-      </p>
-
-      <p>
-        Please wait for the next performance.
-      </p>
-    </div>
-  `;
-}
-
-function renderScoring(performance) {
-  const score = totalScore(currentScores);
-
-  const contestantName =
-    performance.category === "Duet"
-      ? `${performance.name || ""} & ${performance.secondName || ""}`
-      : performance.name || "";
-
-  const criteriaHtml = CRITERIA.map(item => {
-    const selected = Number(currentScores[item.key] || 0);
-
-    let buttons = "";
-
-    for (let i = 0; i <= item.max; i++) {
-      buttons += `
-        <button
-          class="score-btn ${selected === i ? "selected" : ""}"
-          data-criterion="${item.key}"
-          data-score="${i}"
-          ${submitted ? "disabled" : ""}
-        >
-          ${i}
-        </button>
-      `;
     }
 
-    return `
-      <div class="criterion">
-        <div class="criterion-top">
-          <div class="criterion-name">
-            ${escapeHtml(item.name)}
-          </div>
+    return (
+      team?.name ||
+      ""
+    );
 
-          <div class="criterion-max">
-            Max ${item.max}
-          </div>
-        </div>
+  }
 
-        <div class="score-buttons">
-          ${buttons}
-        </div>
+  return "";
+
+}
+
+/* =========================================================
+   CONTESTANT DISPLAY NAME
+   ========================================================= */
+
+function contestantDisplayName(
+  contestant
+) {
+
+  if (!contestant) {
+    return "";
+  }
+
+  if (
+    contestant.category ===
+      "Duet" &&
+    contestant.name2
+  ) {
+
+    return (
+      `${contestant.name} & ` +
+      `${contestant.name2}`
+    );
+
+  }
+
+  return contestant.name || "";
+
+}
+
+/* =========================================================
+   TOTAL
+   ========================================================= */
+
+function totalScore() {
+
+  return C.reduce(
+    (total, item) => {
+
+      const key =
+        item[0];
+
+      return (
+        total +
+        (
+          Number(
+            draft[key]
+          ) || 0
+        )
+      );
+
+    },
+    0
+  );
+
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+function header() {
+
+  const judge =
+    currentJudge();
+
+  return `
+    <div class="header">
+
+      <h1>
+        ROYAL KARAOKE SKN
+      </h1>
+
+      <p>
+        DIGITAL JUDGING SYSTEM
+      </p>
+
+      <div class="judge-badge">
+
+        ${E(
+          judge?.name ||
+          "Judge"
+        )}
+
       </div>
-    `;
-  }).join("");
 
-  appRoot.innerHTML = `
-    ${renderHeader()}
+    </div>
+  `;
+
+}
+
+/* =========================================================
+   WAITING SCREEN
+   ========================================================= */
+
+function waiting() {
+
+  root.innerHTML = `
+
+    ${header()}
+
+    <div class="card waiting">
+
+      <h2>
+        WAITING FOR PERFORMANCE
+      </h2>
+
+      <p>
+        The Auditor has not yet activated
+        a performance.
+      </p>
+
+      <p>
+        When the Auditor activates the next
+        performer, the information will
+        appear here automatically.
+      </p>
+
+    </div>
+
+  `;
+
+}
+
+/* =========================================================
+   JUDGE NOT ACTIVE
+   ========================================================= */
+
+function inactive() {
+
+  root.innerHTML = `
+
+    <div class="header">
+
+      <h1>
+        ROYAL KARAOKE SKN
+      </h1>
+
+      <p>
+        DIGITAL JUDGING SYSTEM
+      </p>
+
+    </div>
+
+    <div class="card waiting">
+
+      <h2>
+        JUDGE NOT ACTIVE
+      </h2>
+
+      <p>
+        This judge is not enabled for
+        the current competition.
+      </p>
+
+      <p>
+        Current competition:
+        <strong>
+          ${judgeCount()} Judges
+        </strong>
+      </p>
+
+    </div>
+
+  `;
+
+}
+
+/* =========================================================
+   ERROR SCREEN
+   ========================================================= */
+
+function errorScreen(
+  message
+) {
+
+  root.innerHTML = `
+
+    <div class="header">
+
+      <h1>
+        ROYAL KARAOKE SKN
+      </h1>
+
+    </div>
+
+    <div class="card waiting">
+
+      <h2>
+        CONNECTION ERROR
+      </h2>
+
+      <p>
+        ${E(message)}
+      </p>
+
+    </div>
+
+  `;
+
+}
+
+/* =========================================================
+   SUBMITTED SCREEN
+   ========================================================= */
+
+function submittedScreen(
+  contestant,
+  score
+) {
+
+  const team =
+    getTeamName(
+      contestant
+    );
+
+  const name =
+    contestantDisplayName(
+      contestant
+    );
+
+  root.innerHTML = `
+
+    ${header()}
+
+    <div class="card submitted">
+
+      <div class="performance-number">
+
+        PERFORMANCE #
+        ${E(
+          contestant.number
+        )}
+
+      </div>
+
+      <h2>
+        SCORE SUBMITTED
+      </h2>
+
+      <div class="contestant-name">
+
+        ${E(name)}
+
+      </div>
+
+      <div class="details">
+
+        <div>
+          <strong>
+            Category:
+          </strong>
+
+          ${E(
+            contestant.category
+          )}
+        </div>
+
+        <div>
+          <strong>
+            Team:
+          </strong>
+
+          ${E(
+            team ||
+            "Unassigned"
+          )}
+        </div>
+
+        <div>
+          <strong>
+            Song:
+          </strong>
+
+          ${E(
+            contestant.song ||
+            ""
+          )}
+        </div>
+
+      </div>
+
+      <div class="final-number">
+
+        ${Number(
+          score.total || 0
+        ).toFixed(0)}
+
+      </div>
+
+      <p>
+        / ${MAX_TOTAL}
+      </p>
+
+      <p>
+        Your score has been recorded
+        and is locked.
+      </p>
+
+      <p>
+        Please wait for the next
+        performance.
+      </p>
+
+    </div>
+
+  `;
+
+}
+
+/* =========================================================
+   SCORING SCREEN
+   ========================================================= */
+
+function scoringScreen(
+  contestant
+) {
+
+  const team =
+    getTeamName(
+      contestant
+    );
+
+  const name =
+    contestantDisplayName(
+      contestant
+    );
+
+  const total =
+    totalScore();
+
+  const criteria =
+    C.map(
+      ([key, label, max]) => {
+
+        const selected =
+          Number(
+            draft[key] ?? 0
+          );
+
+        let buttons = "";
+
+        for (
+          let n = 0;
+          n <= max;
+          n++
+        ) {
+
+          buttons += `
+
+            <button
+              class="score-btn ${
+                selected === n
+                  ? "selected"
+                  : ""
+              }"
+              data-k="${E(key)}"
+              data-n="${n}"
+              type="button"
+            >
+              ${n}
+            </button>
+
+          `;
+
+        }
+
+        return `
+
+          <div class="criterion">
+
+            <div class="criterion-top">
+
+              <div class="criterion-name">
+
+                ${E(label)}
+
+              </div>
+
+              <div class="criterion-max">
+
+                Max ${max}
+
+              </div>
+
+            </div>
+
+            <div class="score-buttons">
+
+              ${buttons}
+
+            </div>
+
+          </div>
+
+        `;
+
+      }
+    ).join("");
+
+  root.innerHTML = `
+
+    ${header()}
 
     <div class="card">
 
       <div class="performance-number">
-        PERFORMANCE #${escapeHtml(performance.number)}
+
+        PERFORMANCE #
+        ${E(
+          contestant.number
+        )}
+
       </div>
 
       <div class="contestant-name">
-        ${escapeHtml(contestantName)}
+
+        ${E(name)}
+
       </div>
 
       <div class="details">
+
         <div>
-          <strong>Category:</strong>
-          ${escapeHtml(performance.category)}
+
+          <strong>
+            Category:
+          </strong>
+
+          ${E(
+            contestant.category
+          )}
+
         </div>
 
         <div>
-          <strong>Song:</strong>
-          ${escapeHtml(performance.song)}
+
+          <strong>
+            Team:
+          </strong>
+
+          ${E(
+            team ||
+            "Unassigned"
+          )}
+
         </div>
 
         <div>
-          <strong>Team:</strong>
-          ${escapeHtml(performance.teamName || "—")}
+
+          <strong>
+            Song:
+          </strong>
+
+          ${E(
+            contestant.song ||
+            ""
+          )}
+
         </div>
+
       </div>
 
       <div class="criteria">
-        ${criteriaHtml}
+
+        ${criteria}
+
       </div>
 
       <div class="total-box">
+
         <div class="total-label">
+
           CURRENT TOTAL
+
         </div>
 
         <div class="total-score">
-          ${score} / 100
+
+          ${total} / ${MAX_TOTAL}
+
         </div>
+
       </div>
 
-      <div class="status" id="status"></div>
+      <div
+        class="status"
+        id="status"
+      ></div>
 
       <button
         class="submit-btn"
         id="submitScore"
-        ${submitted ? "disabled" : ""}
+        type="button"
       >
-        ${submitted ? "SCORE SUBMITTED" : "SUBMIT SCORE"}
+
+        SUBMIT SCORE
+
       </button>
 
     </div>
+
   `;
 
-  wireScoring(performance);
+  wireScoring();
+
 }
 
-function wireScoring(performance) {
-  document.querySelectorAll(".score-btn").forEach(button => {
-    button.addEventListener("click", () => {
+/* =========================================================
+   WIRE SCORING BUTTONS
+   ========================================================= */
 
-      if (submitted) return;
+function wireScoring() {
 
-      const criterion = button.dataset.criterion;
-      const score = Number(button.dataset.score);
+  document
+    .querySelectorAll(
+      ".score-btn"
+    )
+    .forEach(
+      button => {
 
-      currentScores[criterion] = score;
+        button.addEventListener(
+          "click",
+          () => {
 
-      renderScoring(performance);
-    });
-  });
+            if (submitting) {
+              return;
+            }
 
-  const submitButton = document.getElementById("submitScore");
+            const key =
+              button.dataset.k;
 
-  if (submitButton) {
-    submitButton.addEventListener("click", () => {
-      submitScore(performance);
-    });
+            const value =
+              Number(
+                button.dataset.n
+              );
+
+            const criterion =
+              C.find(
+                item =>
+                  item[0] === key
+              );
+
+            if (!criterion) {
+              return;
+            }
+
+            const max =
+              criterion[2];
+
+            if (
+              value < 0 ||
+              value > max
+            ) {
+
+              return;
+
+            }
+
+            draft[key] =
+              value;
+
+            scoringScreen(
+              activeContestant()
+            );
+
+          }
+        );
+
+      }
+    );
+
+  document
+    .getElementById(
+      "submitScore"
+    )
+    ?.addEventListener(
+      "click",
+      submitScore
+    );
+
+}
+
+/* =========================================================
+   VALIDATE SCORE
+   ========================================================= */
+
+function validateScore() {
+
+  for (
+    const [
+      key,
+      label,
+      max
+    ] of C
+  ) {
+
+    if (
+      draft[key] ===
+      undefined
+    ) {
+
+      return {
+        ok: false,
+
+        message:
+          `Please enter a score for ${label}.`
+      };
+
+    }
+
+    const value =
+      Number(
+        draft[key]
+      );
+
+    if (
+      !Number.isInteger(
+        value
+      ) ||
+      value < 0 ||
+      value > max
+    ) {
+
+      return {
+        ok: false,
+
+        message:
+          `Invalid score for ${label}.`
+      };
+
+    }
+
   }
+
+  return {
+    ok: true,
+    total: totalScore()
+  };
+
 }
 
-async function submitScore(performance) {
+/* =========================================================
+   SUBMIT SCORE
+   ========================================================= */
 
-  if (submitted) return;
+async function submitScore() {
 
-  const missing = CRITERIA.filter(item => {
-    return currentScores[item.key] === undefined;
-  });
+  if (submitting) {
+    return;
+  }
 
-  if (missing.length > 0) {
-    const status = document.getElementById("status");
+  const contestant =
+    activeContestant();
+
+  if (!contestant) {
+
+    alert(
+      "There is no active performance."
+    );
+
+    return;
+
+  }
+
+  if (!judgeId) {
+
+    alert(
+      "Judge identification error."
+    );
+
+    return;
+
+  }
+
+  const validation =
+    validateScore();
+
+  if (!validation.ok) {
+
+    const status =
+      document.getElementById(
+        "status"
+      );
 
     if (status) {
+
       status.textContent =
-        "Please enter a score for every judging category.";
-      status.className = "status error";
+        validation.message;
+
+      status.className =
+        "status error";
+
     }
 
     return;
+
   }
 
-  const scoreTotal = totalScore(currentScores);
+  const total =
+    validation.total;
 
-  if (scoreTotal > 100) {
-    alert("The total score cannot exceed 100.");
+  const confirmed =
+    confirm(
+      `Submit ${total}/${MAX_TOTAL}?\n\n` +
+      "This score will be permanently locked."
+    );
+
+  if (!confirmed) {
     return;
   }
 
-  const scoreRef = ref(
-    db,
-    `event/scores/${performance.id}/j${judgeNumber}`
-  );
+  submitting = true;
 
   try {
 
-    await set(scoreRef, {
-      voiceManagement: Number(currentScores.voiceManagement),
-      voiceTiming: Number(currentScores.voiceTiming),
-      costume: Number(currentScores.costume),
-      props: Number(currentScores.props),
-      performance: Number(currentScores.performance),
-      crowdResponse: Number(currentScores.crowdResponse),
-      total: scoreTotal,
-      submittedAt: Date.now()
-    });
+    const activeId =
+      D.active;
 
-    submitted = true;
+    const scoreRef =
+      ref(
+        db,
+        `event/scores/${activeId}/${judgeId}`
+      );
 
-    renderSubmitted(performance);
+    const result =
+      await runTransaction(
+        scoreRef,
+        current => {
+
+          /*
+            Do not overwrite an existing
+            submitted score.
+          */
+
+          if (
+            current !== null
+          ) {
+
+            return;
+
+          }
+
+          return {
+
+            ...draft,
+
+            total,
+
+            judgeId,
+
+            judgeNo:
+              J[judgeId].no,
+
+            submitted:
+              true,
+
+            submittedAt:
+              Date.now()
+
+          };
+
+        }
+      );
+
+    if (
+      !result.committed
+    ) {
+
+      alert(
+        "A score has already been submitted for this performance."
+      );
+
+      submitting = false;
+
+      processEvent();
+
+      return;
+
+    }
+
+    draft = {};
+
+    submitting = false;
+
+    processEvent();
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "Score submission error:",
+      error
+    );
 
-    const status = document.getElementById("status");
+    submitting = false;
 
-    if (status) {
-      status.textContent =
-        "Unable to submit the score. Please try again.";
-      status.className = "status error";
-    }
+    alert(
+      "The score could not be submitted.\n\n" +
+      error.message
+    );
+
   }
+
 }
 
-function processEvent(data) {
+/* =========================================================
+   PROCESS FIREBASE EVENT
+   ========================================================= */
 
-  eventData = data || {};
+function processEvent() {
 
   if (!isJudgeActive()) {
-    renderInactive();
+
+    inactive();
+
     return;
+
   }
 
-  const performance = activePerformance();
-
-  if (!performance) {
-    submitted = false;
-    currentScores = {};
-    renderWaiting();
-    return;
-  }
-
-  const scoreForThisJudge =
-    eventData.scores &&
-    eventData.scores[performance.id] &&
-    eventData.scores[performance.id][`j${judgeNumber}`];
+  const contestant =
+    activeContestant();
 
   /*
-    If Firebase already contains a submitted score for this
-    performance, lock this judge's screen.
+    No active contestant.
   */
 
-  if (scoreForThisJudge && scoreForThisJudge.submittedAt) {
+  if (!contestant) {
 
-    currentScores = {
-      voiceManagement: Number(scoreForThisJudge.voiceManagement || 0),
-      voiceTiming: Number(scoreForThisJudge.voiceTiming || 0),
-      costume: Number(scoreForThisJudge.costume || 0),
-      props: Number(scoreForThisJudge.props || 0),
-      performance: Number(scoreForThisJudge.performance || 0),
-      crowdResponse: Number(scoreForThisJudge.crowdResponse || 0)
-    };
+    draft = {};
 
-    submitted = true;
+    draftPerformanceId =
+      null;
 
-    renderSubmitted(performance);
+    waiting();
 
     return;
+
   }
 
   /*
-    New performance.
-    Clear the previous score.
+    Detect a NEW performance.
   */
 
-  submitted = false;
-  currentScores = {};
+  if (
+    draftPerformanceId !==
+    D.active
+  ) {
 
-  renderScoring(performance);
+    draft = {};
+
+    draftPerformanceId =
+      D.active;
+
+  }
+
+  /*
+    Check whether this judge
+    has already submitted.
+  */
+
+  const existing =
+    scoreData();
+
+  if (
+    existing &&
+    existing.submitted === true
+  ) {
+
+    submittedScreen(
+      contestant,
+      existing
+    );
+
+    return;
+
+  }
+
+  /*
+    Otherwise show scoring.
+  */
+
+  scoringScreen(
+    contestant
+  );
+
 }
+
+/* =========================================================
+   START
+   ========================================================= */
 
 async function start() {
 
-  judgeNumber = getJudgeFromUrl();
+  judgeId =
+    getJudgeFromUrl();
 
-  if (!judgeNumber) {
-    renderError(
-      "No valid judge number was supplied. Use ?judge=1, ?judge=2, ?judge=3, etc."
+  if (!judgeId) {
+
+    errorScreen(
+      "No valid judge number was supplied.\n\n" +
+      "Use ?judge=1, ?judge=2, ?judge=3, etc."
     );
+
     return;
+
   }
 
   try {
 
-    await signInAnonymously(auth);
-
-    onValue(ref(db, "event"), snapshot => {
-      processEvent(snapshot.val());
-    });
+    await signInAnonymously(
+      au
+    );
 
   } catch (error) {
 
-    console.error(error);
-
-    renderError(
-      "Unable to connect to the judging system."
+    console.error(
+      error
     );
+
+    errorScreen(
+      "Firebase authentication failed."
+    );
+
+    return;
+
   }
+
+  onValue(
+    ref(db, "event"),
+    snapshot => {
+
+      D =
+        snapshot.val() || {};
+
+      processEvent();
+
+    },
+    error => {
+
+      console.error(
+        error
+      );
+
+      errorScreen(
+        error.message
+      );
+
+    }
+  );
+
 }
 
 start();
