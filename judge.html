@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Royal Karaoke SKN - Judge</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 15px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 15px 10px 20px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .judge-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 18px;
+      border-radius: 20px;
+      background: #333;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .card {
+      background: #1e1e1e;
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 15px;
+      box-shadow: 0 3px 12px rgba(0,0,0,.35);
+    }
+
+    .waiting {
+      text-align: center;
+      padding: 45px 20px;
+    }
+
+    .waiting h2 {
+      margin-top: 0;
+      font-size: 25px;
+    }
+
+    .waiting p {
+      color: #bbb;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .performance-number {
+      text-align: center;
+      font-size: 17px;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .contestant-name {
+      text-align: center;
+      font-size: 30px;
+      font-weight: 800;
+      margin: 5px 0 8px;
+    }
+
+    .details {
+      text-align: center;
+      color: #ccc;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    .criteria {
+      margin-top: 18px;
+    }
+
+    .criterion {
+      background: #292929;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .criterion-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .criterion-name {
+      font-size: 17px;
+      font-weight: bold;
+    }
+
+    .criterion-max {
+      font-size: 14px;
+      color: #aaa;
+      white-space: nowrap;
+    }
+
+    .score-buttons {
+      display: grid;
+      grid-template-columns: repeat(11, 1fr);
+      gap: 5px;
+    }
+
+    .score-btn {
+      border: none;
+      border-radius: 7px;
+      min-height: 40px;
+      background: #444;
+      color: #fff;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .score-btn.selected {
+      background: #fff;
+      color: #111;
+      transform: scale(1.04);
+    }
+
+    .score-btn:disabled {
+      opacity: .55;
+      cursor: default;
+    }
+
+    .total-box {
+      text-align: center;
+      background: #292929;
+      border-radius: 14px;
+      padding: 18px;
+      margin-top: 18px;
+    }
+
+    .total-label {
+      font-size: 16px;
+      color: #bbb;
+    }
+
+    .total-score {
+      font-size: 48px;
+      font-weight: 900;
+      margin-top: 4px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 18px;
+      margin-top: 15px;
+      background: #fff;
+      color: #111;
+      font-size: 20px;
+      font-weight: 900;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .submit-btn:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .submitted {
+      text-align: center;
+      padding: 25px 10px;
+    }
+
+    .submitted h2 {
+      margin: 0 0 10px;
+      font-size: 26px;
+    }
+
+    .submitted .final-number {
+      font-size: 55px;
+      font-weight: 900;
+    }
+
+    .status {
+      text-align: center;
+      min-height: 25px;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    .error {
+      color: #ff7777;
+    }
+
+    @media (max-width: 500px) {
+      .app {
+        padding: 10px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .contestant-name {
+        font-size: 25px;
+      }
+
+      .score-buttons {
+        grid-template-columns: repeat(6, 1fr);
+      }
+
+      .score-btn {
+        min-height: 43px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app" id="app">
+    <div class="waiting">
+      <h2>ROYAL KARAOKE SKN</h2>
+      <p>Loading Judge Station...</p>
+    </div>
+  </div>
+
+  <script type="module" src="./judge.js"></script>
+
+</body>
+</html>
