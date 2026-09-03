@@ -2992,6 +2992,16 @@ function judge() {
             here automatically.
           </p>
 
+          <br>
+
+          <button
+            id="jwaitingLogout"
+            class="primary"
+            type="button"
+          >
+            RETURN TO LOGIN
+          </button>
+
         </div>
 
       </div>
@@ -4796,27 +4806,21 @@ function wire() {
 
   if (!role) {
 
-    document
-      .getElementById("aud")
-      ?.addEventListener(
-        "click",
-        () => {
+   document
+  .getElementById("jout")
+  ?.addEventListener(
+    "click",
+    logout
+  );
 
-          role =
-            "auditor";
+document
+  .getElementById("jwaitingLogout")
+  ?.addEventListener(
+    "click",
+    logout
+  );
 
-          localStorage.setItem(
-            "rk_role",
-            role
-          );
-
-          page =
-            "home";
-
-          render();
-
-        }
-      );
+return;
 
     document
       .querySelectorAll(".jl")
