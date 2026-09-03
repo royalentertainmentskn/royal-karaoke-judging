@@ -1,9 +1,10 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 
 import {
   getDatabase,
   ref,
-  set,
   onValue,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
@@ -13,21 +14,23 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
-import { firebaseConfig } from "./firebase-config.js";
+import {
+  firebaseConfig
+} from "./firebase-config.js";
 
-/* =========================================================
-   ROYAL KARAOKE SKN
-   JUDGE-ONLY SCORING SYSTEM
-   ========================================================= */
 
-const fb = initializeApp(firebaseConfig);
-const db = getDatabase(fb);
-const au = getAuth(fb);
+// ============================================================
+// FIREBASE
+// ============================================================
 
-/* =========================================================
-   JUDGING CRITERIA
-   TOTAL = 100
-   ========================================================= */
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+
+// ============================================================
+// JUDGING CRITERIA
+// ============================================================
 
 const C = [
   ["voiceManagement", "Voice Management", 10],
@@ -38,14 +41,10 @@ const C = [
   ["crowdResponse", "Crowd Response", 20]
 ];
 
-const MAX_TOTAL = C.reduce(
-  (total, item) => total + item[2],
-  0
-);
 
-/* =========================================================
-   JUDGES
-   ========================================================= */
+// ============================================================
+// JUDGES
+// ============================================================
 
 const J = {
   j1: { no: 1, name: "Judge 1" },
@@ -55,736 +54,413 @@ const J = {
   j5: { no: 5, name: "Judge 5" }
 };
 
-/* =========================================================
-   APPLICATION STATE
-   ========================================================= */
 
-const root = document.getElementById("app");
+// ============================================================
+// APPLICATION STATE
+// ============================================================
 
 let D = {};
-
 let judgeId = null;
-
 let draft = {};
-
 let draftPerformanceId = null;
-
 let submitting = false;
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
 
-const E = value =>
-  String(value ?? "").replace(
-    /[&<>"']/g,
-    c =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      }[c])
-  );
+// ============================================================
+// ELEMENT
+// ============================================================
 
-/* =========================================================
-   GET JUDGE FROM URL / SAVED STATION
-   =========================================================
+const appEl = document.getElementById("app");
 
-   First visit:
-     judge.html?judge=1
 
-   The selected station is then saved locally.
+// ============================================================
+// JUDGE SELECTION
+// ============================================================
 
-   Future visits can remember the station.
-   ========================================================= */
+function getSavedJudge() {
+  const saved = sessionStorage.getItem("rk_current_judge");
 
-function getJudgeFromUrl() {
+  if (!saved) return null;
 
-  const params =
-    new URLSearchParams(
-      window.location.search
-    );
+  const number = Number(saved);
 
-  const number =
-    Number(
-      params.get("judge")
-    );
-
-  /*
-    If a valid judge number is supplied
-    in the URL, use it and remember it.
-  */
-
-  if (
-    number >= 1 &&
-    number <= 5
-  ) {
-
-    const id = `j${number}`;
-
-    localStorage.setItem(
-      "rk_station_judge",
-      id
-    );
-
-    return id;
-  }
-
-  /*
-    Otherwise use the judge previously
-    saved on this tablet.
-  */
-
-  const saved =
-    localStorage.getItem(
-      "rk_station_judge"
-    );
-
-  if (
-    saved &&
-    J[saved]
-  ) {
-
-    return saved;
+  if (number >= 1 && number <= 5) {
+    return number;
   }
 
   return null;
 }
 
-/* =========================================================
-   NUMBER OF JUDGES
-   ========================================================= */
+
+function saveJudge(number) {
+  sessionStorage.setItem("rk_current_judge", String(number));
+}
+
+
+function clearJudge() {
+  sessionStorage.removeItem("rk_current_judge");
+
+  judgeId = null;
+  draft = {};
+  draftPerformanceId = null;
+}
+
+
+// ============================================================
+// JUDGE COUNT
+// ============================================================
 
 function judgeCount() {
-
-  const value =
-    Number(D.judgeCount);
-
-  return value === 3
-    ? 3
-    : 5;
+  return D.judgeCount === 3 ? 3 : 5;
 }
 
-/* =========================================================
-   CURRENT JUDGE
-   ========================================================= */
+
+// ============================================================
+// CURRENT JUDGE
+// ============================================================
 
 function currentJudge() {
+  if (!judgeId) return null;
 
-  return J[judgeId] || null;
-
+  return J[`j${judgeId}`] || null;
 }
 
-/* =========================================================
-   IS JUDGE ACTIVE?
-   ========================================================= */
+
+// ============================================================
+// CHECK IF JUDGE IS ACTIVE
+// ============================================================
 
 function isJudgeActive() {
+  if (!judgeId) return false;
 
-  const judge =
-    currentJudge();
-
-  if (!judge) {
-    return false;
-  }
-
-  return (
-    judge.no <=
-    judgeCount()
-  );
-
+  return judgeId <= judgeCount();
 }
 
-/* =========================================================
-   ACTIVE CONTESTANT
-   ========================================================= */
+
+// ============================================================
+// ACTIVE CONTESTANT
+// ============================================================
 
 function activeContestant() {
+  if (!D.active) return null;
 
-  if (!D.active) {
-    return null;
-  }
-
-  return (
-    D.contestants?.[
-      D.active
-    ] || null
-  );
-
+  return D.contestants?.[D.active] || null;
 }
 
-/* =========================================================
-   CURRENT SCORES
-   ========================================================= */
+
+// ============================================================
+// SCORE DATA
+// ============================================================
 
 function scoreData() {
+  if (!D.active || !judgeId) return null;
 
-  if (!D.active) {
-    return null;
-  }
-
-  if (!D.scores) {
-    return null;
-  }
-
-  return (
-    D.scores?.[
-      D.active
-    ]?.[
-      judgeId
-    ] || null
-  );
-
+  return D.scores?.[D.active]?.[`j${judgeId}`] || null;
 }
 
-/* =========================================================
-   TEAM NAME
-   ========================================================= */
 
-function getTeamName(contestant) {
+// ============================================================
+// TEAM NAME
+// ============================================================
 
-  if (!contestant) {
-    return "";
-  }
+function getTeamName(c) {
+  if (!c) return "";
 
-  if (
-    contestant.team
-  ) {
+  if (c.team) return c.team;
 
-    return contestant.team;
+  if (c.teamId && D.teams?.[c.teamId]) {
+    const team = D.teams[c.teamId];
 
-  }
-
-  if (
-    contestant.teamId &&
-    D.teams
-  ) {
-
-    const team =
-      D.teams[
-        contestant.teamId
-      ];
-
-    if (
-      typeof team ===
-      "string"
-    ) {
-
+    if (typeof team === "string") {
       return team;
-
     }
 
-    return (
-      team?.name ||
-      ""
-    );
-
+    return team.name || "";
   }
 
   return "";
-
 }
 
-/* =========================================================
-   CONTESTANT DISPLAY NAME
-   ========================================================= */
 
-function contestantDisplayName(
-  contestant
-) {
+// ============================================================
+// CONTESTANT DISPLAY NAME
+// ============================================================
 
-  if (!contestant) {
-    return "";
-  }
+function contestantDisplayName(c) {
+  if (!c) return "";
 
   if (
-    contestant.category ===
-      "Duet" &&
-    contestant.name2
+    c.category === "Duet" &&
+    c.name2
   ) {
-
-    return (
-      `${contestant.name} & ` +
-      `${contestant.name2}`
-    );
-
+    return `${c.name} & ${c.name2}`;
   }
 
-  return contestant.name || "";
-
+  return c.name || "";
 }
 
-/* =========================================================
-   TOTAL
-   ========================================================= */
+
+// ============================================================
+// TOTAL SCORE
+// ============================================================
 
 function totalScore() {
-
-  return C.reduce(
-    (total, item) => {
-
-      const key =
-        item[0];
-
-      return (
-        total +
-        (
-          Number(
-            draft[key]
-          ) || 0
-        )
-      );
-
-    },
-    0
-  );
-
+  return C.reduce((sum, item) => {
+    return sum + Number(draft[item[0]] || 0);
+  }, 0);
 }
 
-/* =========================================================
-   HEADER
-   ========================================================= */
 
-function header() {
+// ============================================================
+// MAIN RENDER
+// ============================================================
 
-  const judge =
-    currentJudge();
+function render() {
 
-  const stationNumber =
-    judge?.no || "?";
+  // ----------------------------------------------------------
+  // NO JUDGE SELECTED
+  // ----------------------------------------------------------
 
-  return `
+  if (!judgeId) {
+    renderJudgeSelection();
+    return;
+  }
+
+
+  // ----------------------------------------------------------
+  // INVALID / INACTIVE JUDGE
+  // ----------------------------------------------------------
+
+  if (!isJudgeActive()) {
+    renderInactiveJudge();
+    return;
+  }
+
+
+  const judge = currentJudge();
+  const contestant = activeContestant();
+
+
+  // ----------------------------------------------------------
+  // HEADER
+  // ----------------------------------------------------------
+
+  let html = `
     <div class="header">
-
-      <div class="brand">
-        ROYAL KARAOKE SKN
-      </div>
-
-      <div class="brand-sub">
-        DIGITAL JUDGING SYSTEM
-      </div>
+      <h1>ROYAL KARAOKE SKN</h1>
+      <p>Judging System</p>
 
       <div class="judge-badge">
-        JUDGE STATION ${E(stationNumber)}
+        JUDGE STATION ${judge.no}
       </div>
-
     </div>
   `;
 
-}
 
-/* =========================================================
-   WAITING SCREEN
-   ========================================================= */
+  // ----------------------------------------------------------
+  // NO ACTIVE PERFORMANCE
+  // ----------------------------------------------------------
 
-function waiting() {
+  if (!contestant) {
 
-  root.innerHTML = `
+    html += `
+      <div class="card waiting">
 
-    ${header()}
+        <h2>WAITING FOR PERFORMANCE</h2>
 
-    <div class="card waiting">
+        <p>
+          The Auditor has not activated a contestant yet.
+        </p>
 
-      <div class="waiting-icon">
-        🎤
-      </div>
+        <p>
+          Please wait for the next performance.
+        </p>
 
-      <h2>
-        WAITING FOR PERFORMANCE
-      </h2>
-
-      <p>
-        The Auditor has not yet activated
-        a performance.
-      </p>
-
-      <p>
-        When the Auditor activates the next
-        performer, the information will
-        appear here automatically.
-      </p>
-
-    </div>
-
-  `;
-
-}
-
-/* =========================================================
-   JUDGE NOT ACTIVE
-   ========================================================= */
-
-function inactive() {
-
-  root.innerHTML = `
-
-    ${header()}
-
-    <div class="card waiting">
-
-      <div class="waiting-icon">
-        ⚠️
-      </div>
-
-      <h2>
-        JUDGE NOT ACTIVE
-      </h2>
-
-      <p>
-        This judge is not enabled for
-        the current competition.
-      </p>
-
-      <p>
-        Current competition:
-        <strong>
-          ${judgeCount()} Judges
-        </strong>
-      </p>
-
-    </div>
-
-  `;
-
-}
-
-/* =========================================================
-   ERROR SCREEN
-   ========================================================= */
-
-function errorScreen(
-  message
-) {
-
-  root.innerHTML = `
-
-    <div class="header">
-
-      <div class="brand">
-        ROYAL KARAOKE SKN
-      </div>
-
-      <div class="brand-sub">
-        DIGITAL JUDGING SYSTEM
-      </div>
-
-    </div>
-
-    <div class="card waiting">
-
-      <div class="waiting-icon">
-        ⚠️
-      </div>
-
-      <h2>
-        CONNECTION ERROR
-      </h2>
-
-      <p>
-        ${E(message)}
-      </p>
-
-    </div>
-
-  `;
-
-}
-
-/* =========================================================
-   SUBMITTED SCREEN
-   ========================================================= */
-
-function submittedScreen(
-  contestant,
-  score
-) {
-
-  const team =
-    getTeamName(
-      contestant
-    );
-
-  const name =
-    contestantDisplayName(
-      contestant
-    );
-
-  root.innerHTML = `
-
-    ${header()}
-
-    <div class="card submitted">
-
-      <div class="submitted-icon">
-        ✓
-      </div>
-
-      <div class="performance-number">
-
-        PERFORMANCE #
-        ${E(
-          contestant.number
-        )}
+        <button
+          class="submit-btn"
+          id="changeJudgeBtn"
+          style="margin-top:25px;"
+        >
+          CHANGE JUDGE
+        </button>
 
       </div>
+    `;
 
-      <h2>
-        SCORE SUBMITTED
-      </h2>
+    appEl.innerHTML = html;
 
-      <div class="contestant-name">
+    document
+      .getElementById("changeJudgeBtn")
+      ?.addEventListener("click", () => {
+        clearJudge();
+        render();
+      });
 
-        ${E(name)}
+    return;
+  }
 
-      </div>
 
-      <div class="details">
+  // ----------------------------------------------------------
+  // EXISTING SCORE
+  // ----------------------------------------------------------
 
-        <div class="detail-pill">
-          <strong>
-            Category:
-          </strong>
+  const existingScore = scoreData();
 
-          ${E(
-            contestant.category
-          )}
+
+  // ----------------------------------------------------------
+  // ALREADY SUBMITTED
+  // ----------------------------------------------------------
+
+  if (
+    existingScore &&
+    existingScore.submitted
+  ) {
+
+    html += `
+      <div class="card submitted">
+
+        <h2>SCORE SUBMITTED</h2>
+
+        <p>
+          ${escapeHtml(contestantDisplayName(contestant))}
+        </p>
+
+        <div class="final-number">
+          ${Number(existingScore.total || 0)}
         </div>
 
-        <div class="detail-pill">
-          <strong>
-            Team:
-          </strong>
-
-          ${E(
-            team ||
-            "Unassigned"
-          )}
-        </div>
-
-        <div class="detail-pill">
-          <strong>
-            Song:
-          </strong>
-
-          ${E(
-            contestant.song ||
-            ""
-          )}
-        </div>
+        <p>
+          Your score has been recorded successfully.
+        </p>
 
       </div>
+    `;
 
-      <div class="final-number">
+    appEl.innerHTML = html;
 
-        ${Number(
-          score.total || 0
-        ).toFixed(0)}
+    return;
+  }
 
-      </div>
 
-      <div class="final-number-label">
-        / ${MAX_TOTAL} POINTS
-      </div>
+  // ----------------------------------------------------------
+  // START NEW DRAFT
+  // ----------------------------------------------------------
 
-      <div class="locked-message">
+  if (
+    draftPerformanceId !== D.active
+  ) {
 
-        <strong>
-          ✓ SCORE LOCKED
-        </strong>
+    draft = {};
 
-        <br>
+    draftPerformanceId = D.active;
+  }
 
-        Your score has been recorded
-        and cannot be changed.
 
-        <br><br>
+  // ----------------------------------------------------------
+  // SCORING SCREEN
+  // ----------------------------------------------------------
 
-        Please wait for the next
-        performance.
-
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-/* =========================================================
-   SCORING SCREEN
-   ========================================================= */
-
-function scoringScreen(
-  contestant
-) {
-
-  const team =
-    getTeamName(
-      contestant
-    );
-
-  const name =
-    contestantDisplayName(
-      contestant
-    );
-
-  const total =
-    totalScore();
-
-  const criteria =
-    C.map(
-      ([key, label, max]) => {
-
-        const selected =
-          Number(
-            draft[key] ?? 0
-          );
-
-        let buttons = "";
-
-        for (
-          let n = 0;
-          n <= max;
-          n++
-        ) {
-
-          buttons += `
-
-            <button
-              class="score-btn ${
-                selected === n
-                  ? "selected"
-                  : ""
-              }"
-              data-k="${E(key)}"
-              data-n="${n}"
-              type="button"
-            >
-              ${n}
-            </button>
-
-          `;
-
-        }
-
-        return `
-
-          <div class="criterion">
-
-            <div class="criterion-top">
-
-              <div class="criterion-name">
-
-                ${E(label)}
-
-              </div>
-
-              <div class="criterion-score">
-
-                ${selected}/${max}
-
-              </div>
-
-            </div>
-
-            <div class="score-buttons">
-
-              ${buttons}
-
-            </div>
-
-          </div>
-
-        `;
-
-      }
-    ).join("");
-
-  root.innerHTML = `
-
-    ${header()}
-
-    <div class="card performance-card">
-
-      <div class="performance-number">
-
-        PERFORMANCE #
-        ${E(
-          contestant.number
-        )}
-
-      </div>
-
-      <div class="contestant-name">
-
-        ${E(name)}
-
-      </div>
-
-      <div class="details">
-
-        <div class="detail-pill">
-
-          <strong>
-            Category:
-          </strong>
-
-          ${E(
-            contestant.category
-          )}
-
-        </div>
-
-        <div class="detail-pill">
-
-          <strong>
-            Team:
-          </strong>
-
-          ${E(
-            team ||
-            "Unassigned"
-          )}
-
-        </div>
-
-        <div class="detail-pill">
-
-          <strong>
-            Song:
-          </strong>
-
-          ${E(
-            contestant.song ||
-            ""
-          )}
-
-        </div>
-
-      </div>
-
-    </div>
-
+  html += `
     <div class="card">
 
-      <div class="scoring-heading">
+      <div class="performance-number">
+        PERFORMANCE #${escapeHtml(String(contestant.number || ""))}
+      </div>
 
-        <h2>
-          JUDGING SCORE
-        </h2>
+      <div class="contestant-name">
+        ${escapeHtml(contestantDisplayName(contestant))}
+      </div>
 
-        <div class="max-points">
-          MAX ${MAX_TOTAL}
-        </div>
+      <div class="details">
+
+        ${
+          contestant.category
+            ? `<span class="detail-pill">
+                 ${escapeHtml(contestant.category)}
+               </span>`
+            : ""
+        }
+
+        ${
+          getTeamName(contestant)
+            ? `<span class="detail-pill">
+                 Team: ${escapeHtml(getTeamName(contestant))}
+               </span>`
+            : ""
+        }
+
+        ${
+          contestant.song
+            ? `<span class="detail-pill">
+                 ${escapeHtml(contestant.song)}
+               </span>`
+            : ""
+        }
 
       </div>
 
+
       <div class="criteria">
+  `;
 
-        ${criteria}
 
+  // ----------------------------------------------------------
+  // CRITERIA
+  // ----------------------------------------------------------
+
+  C.forEach(([key, label, max]) => {
+
+    html += `
+      <div class="criterion">
+
+        <div class="criterion-top">
+
+          <div class="criterion-name">
+            ${escapeHtml(label)}
+          </div>
+
+          <div class="criterion-max">
+            Max ${max}
+          </div>
+
+        </div>
+
+        <div class="score-buttons">
+    `;
+
+
+    for (let i = 0; i <= max; i++) {
+
+      const selected =
+        Number(draft[key]) === i
+          ? "selected"
+          : "";
+
+      html += `
+        <button
+          class="score-btn ${selected}"
+          data-criterion="${key}"
+          data-score="${i}"
+          type="button"
+        >
+          ${i}
+        </button>
+      `;
+    }
+
+
+    html += `
+        </div>
+      </div>
+    `;
+  });
+
+
+  // ----------------------------------------------------------
+  // TOTAL
+  // ----------------------------------------------------------
+
+  html += `
       </div>
 
       <div class="total-box">
@@ -793,480 +469,532 @@ function scoringScreen(
           CURRENT TOTAL
         </div>
 
-        <div class="total-score">
-
-          ${total}
-          <span>/ ${MAX_TOTAL}</span>
-
+        <div class="total-score" id="totalScore">
+          ${totalScore()}
         </div>
 
       </div>
 
-      <div
-        class="status"
-        id="status"
-      ></div>
+      <div class="status" id="status"></div>
 
       <button
         class="submit-btn"
-        id="submitScore"
+        id="submitBtn"
         type="button"
       >
+        SUBMIT SCORE
+      </button>
 
-        SUBMIT SCORE — LOCK IT
-
+      <button
+        class="submit-btn"
+        id="changeJudgeBtn"
+        type="button"
+        style="
+          background:#333;
+          color:#fff;
+          margin-top:10px;
+        "
+      >
+        CHANGE JUDGE
       </button>
 
     </div>
-
   `;
 
-  wireScoring();
 
-}
+  appEl.innerHTML = html;
 
-/* =========================================================
-   WIRE SCORING BUTTONS
-   ========================================================= */
 
-function wireScoring() {
+  // ----------------------------------------------------------
+  // SCORE BUTTONS
+  // ----------------------------------------------------------
 
   document
-    .querySelectorAll(
-      ".score-btn"
-    )
-    .forEach(
-      button => {
+    .querySelectorAll(".score-btn")
+    .forEach(button => {
 
-        button.addEventListener(
-          "click",
-          () => {
+      button.addEventListener("click", () => {
 
-            if (submitting) {
-              return;
-            }
+        const criterion =
+          button.dataset.criterion;
 
-            const key =
-              button.dataset.k;
+        const score =
+          Number(button.dataset.score);
 
-            const value =
-              Number(
-                button.dataset.n
-              );
+        draft[criterion] = score;
 
-            const criterion =
-              C.find(
-                item =>
-                  item[0] === key
-              );
+        render();
 
-            if (!criterion) {
-              return;
-            }
+      });
 
-            const max =
-              criterion[2];
+    });
 
-            if (
-              value < 0 ||
-              value > max
-            ) {
 
-              return;
-
-            }
-
-            draft[key] =
-              value;
-
-            scoringScreen(
-              activeContestant()
-            );
-
-          }
-        );
-
-      }
-    );
+  // ----------------------------------------------------------
+  // SUBMIT
+  // ----------------------------------------------------------
 
   document
-    .getElementById(
-      "submitScore"
-    )
+    .getElementById("submitBtn")
     ?.addEventListener(
       "click",
       submitScore
     );
 
+
+  // ----------------------------------------------------------
+  // CHANGE JUDGE
+  // ----------------------------------------------------------
+
+  document
+    .getElementById("changeJudgeBtn")
+    ?.addEventListener("click", () => {
+
+      if (
+        Object.keys(draft).length > 0 &&
+        !scoreData()?.submitted
+      ) {
+
+        const confirmed =
+          confirm(
+            "Changing judge will discard the current unsent score. Continue?"
+          );
+
+        if (!confirmed) return;
+      }
+
+      clearJudge();
+      render();
+
+    });
 }
 
-/* =========================================================
-   VALIDATE SCORE
-   ========================================================= */
 
-function validateScore() {
+// ============================================================
+// JUDGE SELECTION SCREEN
+// ============================================================
 
-  for (
-    const [
-      key,
-      label,
-      max
-    ] of C
-  ) {
+function renderJudgeSelection() {
 
-    if (
-      draft[key] ===
-      undefined
-    ) {
+  const count = judgeCount();
 
-      return {
-        ok: false,
+  let html = `
+    <div class="header">
 
-        message:
-          `Please enter a score for ${label}.`
-      };
+      <h1>ROYAL KARAOKE SKN</h1>
 
-    }
+      <p>Judging System</p>
 
-    const value =
-      Number(
-        draft[key]
-      );
+      <div class="judge-badge">
+        JUDGE SELECTION
+      </div>
 
-    if (
-      !Number.isInteger(
-        value
-      ) ||
-      value < 0 ||
-      value > max
-    ) {
+    </div>
 
-      return {
-        ok: false,
+    <div class="card">
 
-        message:
-          `Invalid score for ${label}.`
-      };
+      <div
+        style="
+          text-align:center;
+          font-size:22px;
+          font-weight:800;
+          margin-bottom:20px;
+        "
+      >
+        SELECT YOUR JUDGE NUMBER
+      </div>
 
-    }
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr;
+          gap:12px;
+        "
+      >
+  `;
 
+
+  for (let i = 1; i <= count; i++) {
+
+    html += `
+      <button
+        type="button"
+        class="submit-btn judge-select-btn"
+        data-judge="${i}"
+        style="
+          margin-top:0;
+          min-height:70px;
+          font-size:22px;
+        "
+      >
+        JUDGE ${i}
+      </button>
+    `;
   }
 
-  return {
-    ok: true,
-    total: totalScore()
-  };
 
+  html += `
+      </div>
+
+      <div
+        style="
+          text-align:center;
+          color:#aaa;
+          margin-top:20px;
+          font-size:15px;
+          line-height:1.5;
+        "
+      >
+        ${count} judges are currently active.
+        <br>
+        Select the number assigned to you.
+      </div>
+
+    </div>
+  `;
+
+
+  appEl.innerHTML = html;
+
+
+  document
+    .querySelectorAll(".judge-select-btn")
+    .forEach(button => {
+
+      button.addEventListener("click", () => {
+
+        const number =
+          Number(button.dataset.judge);
+
+        if (
+          number < 1 ||
+          number > judgeCount()
+        ) {
+          return;
+        }
+
+        judgeId = number;
+
+        saveJudge(number);
+
+        draft = {};
+        draftPerformanceId = null;
+
+        render();
+
+      });
+
+    });
 }
 
-/* =========================================================
-   SUBMIT SCORE
-   ========================================================= */
+
+// ============================================================
+// INACTIVE JUDGE
+// ============================================================
+
+function renderInactiveJudge() {
+
+  appEl.innerHTML = `
+
+    <div class="header">
+
+      <h1>ROYAL KARAOKE SKN</h1>
+
+      <p>Judging System</p>
+
+      <div class="judge-badge">
+        JUDGE ${judgeId}
+      </div>
+
+    </div>
+
+    <div class="card waiting">
+
+      <h2>JUDGE NOT ACTIVE</h2>
+
+      <p>
+        Judge ${judgeId} is not currently active
+        in this competition.
+      </p>
+
+      <button
+        class="submit-btn"
+        id="changeJudgeBtn"
+      >
+        SELECT ANOTHER JUDGE
+      </button>
+
+    </div>
+  `;
+
+
+  document
+    .getElementById("changeJudgeBtn")
+    ?.addEventListener("click", () => {
+
+      clearJudge();
+      render();
+
+    });
+}
+
+
+// ============================================================
+// SUBMIT SCORE
+// ============================================================
 
 async function submitScore() {
 
-  if (submitting) {
-    return;
-  }
+  if (submitting) return;
 
-  const contestant =
-    activeContestant();
+  const contestant = activeContestant();
 
   if (!contestant) {
-
-    alert(
-      "There is no active performance."
-    );
-
+    alert("There is no active contestant.");
     return;
-
   }
 
-  if (!judgeId) {
 
-    alert(
-      "Judge identification error."
-    );
+  // ----------------------------------------------------------
+  // VALIDATE ALL CRITERIA
+  // ----------------------------------------------------------
 
-    return;
+  for (const [key, label] of C) {
 
-  }
+    if (
+      draft[key] === undefined ||
+      draft[key] === null ||
+      draft[key] === ""
+    ) {
 
-  const validation =
-    validateScore();
-
-  if (!validation.ok) {
-
-    const status =
-      document.getElementById(
-        "status"
+      alert(
+        `Please enter a score for ${label}.`
       );
 
-    if (status) {
-
-      status.textContent =
-        validation.message;
-
-      status.className =
-        "status error";
-
+      return;
     }
-
-    return;
-
   }
 
-  const total =
-    validation.total;
 
-  const confirmed =
-    confirm(
-      `Submit ${total}/${MAX_TOTAL}?\n\n` +
-      "This score will be permanently locked."
-    );
+  const activeId = D.active;
 
-  if (!confirmed) {
+  if (!activeId || !judgeId) {
+    alert("Unable to identify the performance or judge.");
     return;
   }
+
+
+  const total = totalScore();
 
   submitting = true;
 
-  try {
 
-    const activeId =
-      D.active;
+  const submitButton =
+    document.getElementById("submitBtn");
+
+  if (submitButton) {
+
+    submitButton.disabled = true;
+    submitButton.textContent = "SUBMITTING...";
+  }
+
+
+  try {
 
     const scoreRef =
       ref(
         db,
-        `event/scores/${activeId}/${judgeId}`
+        `event/scores/${activeId}/j${judgeId}`
       );
+
 
     const result =
       await runTransaction(
         scoreRef,
         current => {
 
-          /*
-            Do not overwrite an existing
-            submitted score.
-          */
-
-          if (
-            current !== null
-          ) {
-
+          // Never overwrite an existing score
+          if (current !== null) {
             return;
-
           }
 
-          return {
 
+          return {
             ...draft,
 
             total,
 
-            judgeId,
+            judgeId: `j${judgeId}`,
 
-            judgeNo:
-              J[judgeId].no,
+            judgeNo: judgeId,
 
-            submitted:
-              true,
+            submitted: true,
 
-            submittedAt:
-              Date.now()
-
+            submittedAt: Date.now()
           };
 
         }
       );
 
-    if (
-      !result.committed
-    ) {
+
+    if (!result.committed) {
 
       alert(
-        "A score has already been submitted for this performance."
+        "This performance has already been scored by this judge."
       );
 
       submitting = false;
 
-      processEvent();
-
       return;
-
     }
 
-    draft = {};
 
     submitting = false;
 
-    processEvent();
+    draft = {};
+
+
+    render();
 
   } catch (error) {
 
-    console.error(
-      "Score submission error:",
-      error
-    );
+    console.error(error);
 
     submitting = false;
 
+    if (submitButton) {
+
+      submitButton.disabled = false;
+      submitButton.textContent = "SUBMIT SCORE";
+    }
+
+
     alert(
-      "The score could not be submitted.\n\n" +
-      error.message
+      "There was a problem submitting the score. Please try again."
     );
-
   }
-
 }
 
-/* =========================================================
-   PROCESS FIREBASE EVENT
-   ========================================================= */
 
-function processEvent() {
+// ============================================================
+// ESCAPE HTML
+// ============================================================
 
-  if (!isJudgeActive()) {
+function escapeHtml(value) {
 
-    inactive();
-
-    return;
-
-  }
-
-  const contestant =
-    activeContestant();
-
-  /*
-    No active contestant.
-  */
-
-  if (!contestant) {
-
-    draft = {};
-
-    draftPerformanceId =
-      null;
-
-    waiting();
-
-    return;
-
-  }
-
-  /*
-    Detect a NEW performance.
-  */
-
-  if (
-    draftPerformanceId !==
-    D.active
-  ) {
-
-    draft = {};
-
-    draftPerformanceId =
-      D.active;
-
-  }
-
-  /*
-    Check whether this judge
-    has already submitted.
-  */
-
-  const existing =
-    scoreData();
-
-  if (
-    existing &&
-    existing.submitted === true
-  ) {
-
-    submittedScreen(
-      contestant,
-      existing
-    );
-
-    return;
-
-  }
-
-  /*
-    Otherwise show scoring.
-  */
-
-  scoringScreen(
-    contestant
-  );
-
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-/* =========================================================
-   START
-   ========================================================= */
+
+// ============================================================
+// FIREBASE EVENT PROCESSING
+// ============================================================
+
+function processEvent(data) {
+
+  D = data || {};
+
+  // Make sure the saved judge is still valid
+  if (
+    judgeId &&
+    judgeId > judgeCount()
+  ) {
+
+    clearJudge();
+  }
+
+
+  render();
+}
+
+
+// ============================================================
+// START
+// ============================================================
 
 async function start() {
 
-  judgeId =
-    getJudgeFromUrl();
-
-  if (!judgeId) {
-
-    errorScreen(
-      "No judge station has been assigned.\n\n" +
-      "Open this page once using ?judge=1, ?judge=2 or ?judge=3."
-    );
-
-    return;
-
-  }
-
   try {
 
-    await signInAnonymously(
-      au
+    await signInAnonymously(auth);
+
+
+    const savedJudge =
+      getSavedJudge();
+
+
+    if (savedJudge) {
+
+      judgeId = savedJudge;
+    }
+
+
+    const eventRef =
+      ref(db, "event");
+
+
+    onValue(
+      eventRef,
+      snapshot => {
+
+        processEvent(
+          snapshot.val()
+        );
+
+      },
+      error => {
+
+        console.error(error);
+
+        appEl.innerHTML = `
+
+          <div class="card waiting">
+
+            <h2>CONNECTION ERROR</h2>
+
+            <p>
+              Unable to connect to the judging system.
+            </p>
+
+            <p>
+              Please check the tablet's internet connection.
+            </p>
+
+          </div>
+
+        `;
+
+      }
     );
 
   } catch (error) {
 
-    console.error(
-      error
-    );
+    console.error(error);
 
-    errorScreen(
-      "Firebase authentication failed."
-    );
+    appEl.innerHTML = `
 
-    return;
+      <div class="card waiting">
 
+        <h2>UNABLE TO START</h2>
+
+        <p>
+          The judging system could not connect.
+        </p>
+
+        <p>
+          Please check the internet connection and try again.
+        </p>
+
+      </div>
+
+    `;
   }
-
-  onValue(
-    ref(db, "event"),
-    snapshot => {
-
-      D =
-        snapshot.val() || {};
-
-      processEvent();
-
-    },
-    error => {
-
-      console.error(
-        error
-      );
-
-      errorScreen(
-        error.message
-      );
-
-    }
-  );
-
 }
+
 
 start();
