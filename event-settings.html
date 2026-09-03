@@ -1,0 +1,266 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Royal Karaoke SKN — Event Settings</title>
+
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    body{
+      background:#0b0b0b;
+      min-height:100vh;
+    }
+
+    .settings-page{
+      max-width:850px;
+      margin:0 auto;
+      padding:20px;
+    }
+
+    .settings-header{
+      text-align:center;
+      padding:28px 20px;
+      margin-bottom:20px;
+      background:linear-gradient(135deg,#0b0b0b,#1b1b1b);
+      border:2px solid #d4af37;
+      border-radius:14px;
+      color:#fff;
+      box-shadow:0 4px 18px #0008;
+    }
+
+    .settings-header h1{
+      margin:0 0 8px;
+      color:#d4af37;
+      font-size:32px;
+    }
+
+    .settings-header p{
+      margin:0;
+      color:#fff;
+    }
+
+    .settings-card{
+      background:#fff;
+      border-radius:14px;
+      padding:24px;
+      box-shadow:0 4px 18px #0005;
+    }
+
+    .settings-card h2{
+      margin-top:0;
+      color:#151515;
+      border-bottom:2px solid #d4af37;
+      padding-bottom:10px;
+    }
+
+    .field{
+      margin-bottom:18px;
+    }
+
+    .field label{
+      display:block;
+      font-weight:bold;
+      margin-bottom:7px;
+      color:#151515;
+    }
+
+    .field input{
+      width:100%;
+      padding:13px;
+      border:1px solid #bbb;
+      border-radius:8px;
+      font-size:16px;
+      box-sizing:border-box;
+    }
+
+    .field input:focus{
+      outline:2px solid #d4af37;
+      border-color:#a98216;
+    }
+
+    .button-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:24px;
+    }
+
+    .save-button{
+      background:linear-gradient(135deg,#d4af37,#a98216);
+      color:#000;
+      border:1px solid #a98216;
+      border-radius:8px;
+      padding:13px 22px;
+      font-weight:bold;
+      cursor:pointer;
+      font-size:15px;
+    }
+
+    .back-button{
+      background:#151515;
+      color:#d4af37;
+      border:1px solid #d4af37;
+      border-radius:8px;
+      padding:13px 22px;
+      font-weight:bold;
+      cursor:pointer;
+      font-size:15px;
+    }
+
+    .status{
+      margin-top:18px;
+      padding:12px;
+      border-radius:8px;
+      display:none;
+      font-weight:bold;
+    }
+
+    .status.success{
+      display:block;
+      background:#e7f7ed;
+      color:#087b30;
+      border:1px solid #a9dfbb;
+    }
+
+    .status.error{
+      display:block;
+      background:#ffe5e5;
+      color:#900;
+      border:1px solid #e2aaaa;
+    }
+
+    .loading{
+      text-align:center;
+      padding:20px;
+      color:#666;
+    }
+
+    .footer{
+      text-align:center;
+      color:#aaa;
+      padding:25px 10px;
+      font-size:13px;
+    }
+
+    @media(max-width:600px){
+      .settings-page{
+        padding:10px;
+      }
+
+      .settings-card{
+        padding:18px;
+      }
+
+      .settings-header h1{
+        font-size:25px;
+      }
+
+      .button-row button{
+        width:100%;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <div class="settings-page">
+
+```
+<div class="settings-header">
+  <h1>ROYAL KARAOKE SKN</h1>
+  <p>Event Settings</p>
+</div>
+
+<div class="settings-card">
+
+  <h2>Competition Information</h2>
+
+  <div id="loading" class="loading">
+    Loading current event information...
+  </div>
+
+  <form id="settingsForm" style="display:none;">
+
+    <div class="field">
+      <label for="competitionName">
+        Competition Name
+      </label>
+
+      <input
+        type="text"
+        id="competitionName"
+        name="competitionName"
+        placeholder="Enter competition name"
+        autocomplete="off"
+        required
+      >
+    </div>
+
+    <div class="field">
+      <label for="venue">
+        Venue
+      </label>
+
+      <input
+        type="text"
+        id="venue"
+        name="venue"
+        placeholder="Enter venue name"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="field">
+      <label for="eventDate">
+        Event Date
+      </label>
+
+      <input
+        type="date"
+        id="eventDate"
+        name="eventDate"
+      >
+    </div>
+
+    <div class="button-row">
+
+      <button
+        type="submit"
+        class="save-button"
+      >
+        SAVE EVENT DETAILS
+      </button>
+
+      <button
+        type="button"
+        class="back-button"
+        id="backButton"
+      >
+        BACK TO AUDITOR
+      </button>
+
+    </div>
+
+    <div id="status" class="status"></div>
+
+  </form>
+
+</div>
+
+<div class="footer">
+  Royal Karaoke SKN • Event Management System
+</div>
+```
+
+  </div>
+
+  <script type="module" src="event-settings.js"></script>
+
+</body>
+</html>
