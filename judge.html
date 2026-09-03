@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8">
 
   <meta
     name="viewport"
-    content="width=device-width,
-             initial-scale=1.0,
-             maximum-scale=1.0,
-             user-scalable=no"
+    content="
+      width=device-width,
+      initial-scale=1.0,
+      maximum-scale=1.0,
+      user-scalable=no
+    "
   >
 
   <meta
@@ -31,7 +35,10 @@
     content="Royal Karaoke Judge"
   >
 
-  <title>Royal Karaoke SKN - Judge Station</title>
+  <title>
+    Royal Karaoke SKN - Judge Station
+  </title>
+
 
   <style>
 
@@ -44,14 +51,18 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+
     html {
       background: #090909;
       min-height: 100%;
     }
 
+
     body {
+
       margin: 0;
       padding: 0;
+
       background:
         radial-gradient(
           circle at top,
@@ -59,27 +70,39 @@
           #111 38%,
           #090909 100%
         );
+
       color: #fff;
+
       font-family:
         Arial,
         Helvetica,
         sans-serif;
+
       min-height: 100vh;
       min-height: 100dvh;
+
       overscroll-behavior: none;
     }
 
+
     button {
+
       font-family: inherit;
+
       -webkit-user-select: none;
       user-select: none;
     }
 
+
     .app {
+
       width: 100%;
       max-width: 850px;
+
       margin: 0 auto;
+
       padding: 12px;
+
       min-height: 100vh;
       min-height: 100dvh;
     }
@@ -90,41 +113,75 @@
        ===================================================== */
 
     .header {
+
       text-align: center;
-      padding: 10px 8px 14px;
+
+      padding:
+        10px
+        8px
+        14px;
     }
 
+
     .brand {
+
       font-size: 30px;
+
       font-weight: 900;
+
       letter-spacing: 1.5px;
+
       line-height: 1.1;
+
       margin: 0;
     }
 
+
     .brand-sub {
+
       margin-top: 5px;
+
       font-size: 14px;
+
       font-weight: 700;
+
       letter-spacing: 2px;
+
       color: #aaa;
     }
 
+
     .judge-badge {
+
       display: inline-flex;
+
       align-items: center;
+
       justify-content: center;
+
       margin-top: 12px;
+
       min-height: 42px;
-      padding: 8px 24px;
+
+      padding:
+        8px
+        24px;
+
       border-radius: 24px;
+
       background: #fff;
+
       color: #111;
+
       font-size: 18px;
+
       font-weight: 900;
+
       letter-spacing: 1px;
+
       box-shadow:
-        0 4px 15px rgba(0,0,0,.35);
+        0 4px 15px
+        rgba(0,0,0,.35);
     }
 
 
@@ -133,18 +190,27 @@
        ===================================================== */
 
     .card {
+
       background:
         linear-gradient(
           145deg,
           #202020,
           #171717
         );
-      border: 1px solid #303030;
+
+      border:
+        1px solid
+        #303030;
+
       border-radius: 18px;
+
       padding: 18px;
+
       margin-bottom: 14px;
+
       box-shadow:
-        0 5px 20px rgba(0,0,0,.38);
+        0 5px 20px
+        rgba(0,0,0,.38);
     }
 
 
@@ -153,45 +219,88 @@
        ===================================================== */
 
     .performance-card {
+
       text-align: center;
-      padding: 20px 16px 22px;
+
+      padding:
+        20px
+        16px
+        22px;
     }
 
+
     .performance-number {
+
       display: inline-block;
-      padding: 6px 14px;
+
+      padding:
+        6px
+        14px;
+
       border-radius: 20px;
+
       background: #2d2d2d;
+
       color: #bbb;
+
       font-size: 14px;
+
       font-weight: 800;
+
       letter-spacing: 1px;
+
       margin-bottom: 9px;
     }
 
+
     .contestant-name {
+
       font-size: 34px;
+
       line-height: 1.12;
+
       font-weight: 900;
-      margin: 4px 0 12px;
+
+      margin:
+        4px
+        0
+        12px;
+
       overflow-wrap: anywhere;
     }
 
+
     .details {
+
       display: flex;
+
       flex-wrap: wrap;
+
       justify-content: center;
+
       gap: 8px;
+
       font-size: 15px;
     }
 
+
     .detail-pill {
+
       background: #292929;
-      border: 1px solid #3a3a3a;
+
+      border:
+        1px solid
+        #3a3a3a;
+
       border-radius: 20px;
-      padding: 7px 13px;
+
+      padding:
+        7px
+        13px;
+
       color: #ddd;
     }
+
 
     .detail-pill strong {
       color: #fff;
@@ -203,22 +312,35 @@
        ===================================================== */
 
     .scoring-heading {
+
       display: flex;
+
       align-items: center;
+
       justify-content: space-between;
+
       gap: 10px;
+
       margin-bottom: 15px;
     }
 
+
     .scoring-heading h2 {
+
       margin: 0;
+
       font-size: 22px;
     }
 
+
     .max-points {
+
       color: #aaa;
+
       font-size: 14px;
+
       font-weight: bold;
+
       white-space: nowrap;
     }
 
@@ -228,77 +350,136 @@
        ===================================================== */
 
     .criterion {
+
       background: #282828;
-      border: 1px solid #363636;
+
+      border:
+        1px solid
+        #363636;
+
       border-radius: 15px;
+
       padding: 14px;
+
       margin-bottom: 13px;
     }
+
 
     .criterion:last-child {
       margin-bottom: 0;
     }
 
+
     .criterion-top {
+
       display: flex;
+
       align-items: center;
+
       justify-content: space-between;
+
       gap: 10px;
+
       margin-bottom: 11px;
     }
 
+
     .criterion-name {
+
       font-size: 18px;
+
       font-weight: 900;
+
       line-height: 1.2;
     }
 
+
     .criterion-score {
+
       flex-shrink: 0;
+
       min-width: 62px;
+
       text-align: center;
-      padding: 6px 8px;
+
+      padding:
+        6px
+        8px;
+
       border-radius: 10px;
+
       background: #111;
+
       color: #fff;
+
       font-size: 16px;
+
       font-weight: 900;
     }
 
+
     .score-buttons {
+
       display: grid;
+
       grid-template-columns:
-        repeat(11, minmax(0, 1fr));
+        repeat(
+          11,
+          minmax(0, 1fr)
+        );
+
       gap: 6px;
     }
 
+
     .score-btn {
+
       border: 0;
+
       border-radius: 9px;
+
       min-height: 48px;
+
       padding: 4px;
+
       background: #454545;
+
       color: #fff;
+
       font-size: 16px;
+
       font-weight: 900;
+
       cursor: pointer;
+
       touch-action: manipulation;
+
       transition:
         transform .08s ease,
         background .08s ease;
     }
 
+
     .score-btn:active {
-      transform: scale(.94);
+
+      transform:
+        scale(.94);
     }
 
+
     .score-btn.selected {
+
       background: #fff;
+
       color: #111;
-      transform: scale(1.05);
+
+      transform:
+        scale(1.05);
+
       box-shadow:
         0 0 0 3px #fff,
-        0 4px 12px rgba(0,0,0,.5);
+        0 4px 12px
+        rgba(0,0,0,.5);
     }
 
 
@@ -307,36 +488,58 @@
        ===================================================== */
 
     .total-box {
+
       margin-top: 18px;
+
       padding: 18px;
+
       border-radius: 17px;
+
       background:
         linear-gradient(
           145deg,
           #303030,
           #202020
         );
-      border: 1px solid #444;
+
+      border:
+        1px solid
+        #444;
+
       text-align: center;
     }
 
+
     .total-label {
+
       font-size: 14px;
+
       font-weight: 800;
+
       letter-spacing: 2px;
+
       color: #aaa;
     }
 
+
     .total-score {
+
       margin-top: 2px;
+
       font-size: 58px;
+
       line-height: 1;
+
       font-weight: 900;
     }
 
+
     .total-score span {
+
       font-size: 24px;
+
       color: #aaa;
+
       font-weight: 700;
     }
 
@@ -346,13 +549,23 @@
        ===================================================== */
 
     .status {
+
       min-height: 27px;
-      margin: 12px 0 0;
+
+      margin:
+        12px
+        0
+        0;
+
       text-align: center;
+
       font-size: 16px;
+
       font-weight: 800;
+
       line-height: 1.4;
     }
+
 
     .status.error {
       color: #ff7777;
@@ -364,31 +577,52 @@
        ===================================================== */
 
     .submit-btn {
+
       width: 100%;
+
       min-height: 64px;
+
       margin-top: 13px;
+
       border: 0;
+
       border-radius: 15px;
+
       background: #fff;
+
       color: #111;
+
       font-size: 21px;
+
       font-weight: 900;
+
       letter-spacing: .5px;
+
       cursor: pointer;
+
       touch-action: manipulation;
+
       box-shadow:
-        0 5px 16px rgba(0,0,0,.4);
+        0 5px 16px
+        rgba(0,0,0,.4);
+
       transition:
         transform .08s ease,
         opacity .15s ease;
     }
 
+
     .submit-btn:active {
-      transform: scale(.98);
+
+      transform:
+        scale(.98);
     }
 
+
     .submit-btn:disabled {
+
       opacity: .45;
+
       cursor: default;
     }
 
@@ -398,26 +632,48 @@
        ===================================================== */
 
     .waiting {
+
       text-align: center;
-      padding: 65px 20px;
+
+      padding:
+        65px
+        20px;
     }
 
+
     .waiting-icon {
+
       font-size: 55px;
+
       margin-bottom: 12px;
     }
 
+
     .waiting h2 {
-      margin: 0 0 12px;
+
+      margin:
+        0
+        0
+        12px;
+
       font-size: 28px;
+
       font-weight: 900;
     }
 
+
     .waiting p {
+
       max-width: 560px;
-      margin: 9px auto;
+
+      margin:
+        9px
+        auto;
+
       color: #aaa;
+
       font-size: 17px;
+
       line-height: 1.55;
     }
 
@@ -427,53 +683,99 @@
        ===================================================== */
 
     .submitted {
+
       text-align: center;
-      padding: 30px 18px 40px;
+
+      padding:
+        30px
+        18px
+        40px;
     }
+
 
     .submitted-icon {
+
       display: flex;
+
       align-items: center;
+
       justify-content: center;
+
       width: 76px;
+
       height: 76px;
-      margin: 0 auto 15px;
+
+      margin:
+        0
+        auto
+        15px;
+
       border-radius: 50%;
+
       background: #fff;
+
       color: #111;
+
       font-size: 43px;
+
       font-weight: 900;
     }
+
 
     .submitted h2 {
-      margin: 0 0 15px;
+
+      margin:
+        0
+        0
+        15px;
+
       font-size: 28px;
+
       font-weight: 900;
     }
+
 
     .submitted .final-number {
+
       margin-top: 25px;
+
       font-size: 78px;
+
       line-height: .95;
+
       font-weight: 900;
     }
 
+
     .submitted .final-number-label {
+
       margin-top: 5px;
+
       color: #aaa;
+
       font-size: 18px;
+
       font-weight: 700;
     }
 
+
     .locked-message {
+
       margin-top: 20px;
+
       padding: 14px;
+
       border-radius: 12px;
+
       background: #292929;
+
       color: #ccc;
+
       font-size: 16px;
+
       line-height: 1.5;
     }
+
 
     .locked-message strong {
       color: #fff;
@@ -485,10 +787,301 @@
        ===================================================== */
 
     .connection-status {
+
       text-align: center;
+
       color: #888;
+
       font-size: 12px;
-      margin: 4px 0 12px;
+
+      margin:
+        4px
+        0
+        12px;
+    }
+
+
+    /* =====================================================
+       JUDGE SELECTION SCREEN
+       ===================================================== */
+
+    .judge-selection-card {
+
+      text-align: center;
+
+      padding:
+        32px
+        24px
+        28px;
+    }
+
+
+    .selection-icon {
+
+      width: 68px;
+
+      height: 68px;
+
+      margin:
+        0
+        auto
+        18px;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      border-radius: 50%;
+
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          .08
+        );
+
+      border:
+        1px solid
+        rgba(
+          255,
+          255,
+          255,
+          .16
+        );
+
+      font-size: 31px;
+
+      font-weight: 900;
+
+      box-shadow:
+        0 6px 20px
+        rgba(0,0,0,.25);
+    }
+
+
+    .selection-title {
+
+      font-size: 25px;
+
+      font-weight: 900;
+
+      letter-spacing: .5px;
+
+      margin-bottom: 10px;
+    }
+
+
+    .selection-subtitle {
+
+      max-width: 500px;
+
+      margin:
+        0
+        auto
+        30px;
+
+      color: #aaa;
+
+      font-size: 16px;
+
+      line-height: 1.55;
+    }
+
+
+    .judge-selection-buttons {
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 14px;
+
+      width: 100%;
+
+      max-width: 560px;
+
+      margin:
+        0
+        auto;
+    }
+
+
+    .judge-selection-btn {
+
+      position: relative;
+
+      width: 100%;
+
+      min-height: 78px;
+
+      border:
+        1px solid
+        #393939;
+
+      border-radius: 15px;
+
+      background:
+        linear-gradient(
+          145deg,
+          #292929,
+          #1d1d1d
+        );
+
+      color: #fff;
+
+      display: flex;
+
+      align-items: center;
+
+      padding:
+        11px
+        18px;
+
+      cursor: pointer;
+
+      touch-action: manipulation;
+
+      box-shadow:
+        0 4px 14px
+        rgba(0,0,0,.28);
+
+      transition:
+        transform .10s ease,
+        background .15s ease,
+        border-color .15s ease,
+        box-shadow .15s ease;
+    }
+
+
+    .judge-selection-btn:hover {
+
+      transform:
+        translateY(-2px);
+
+      background:
+        linear-gradient(
+          145deg,
+          #353535,
+          #222
+        );
+
+      border-color:
+        #555;
+
+      box-shadow:
+        0 7px 18px
+        rgba(0,0,0,.38);
+    }
+
+
+    .judge-selection-btn:active {
+
+      transform:
+        scale(.98);
+    }
+
+
+    .judge-number {
+
+      width: 54px;
+
+      height: 54px;
+
+      flex-shrink: 0;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      border-radius: 12px;
+
+      background: #fff;
+
+      color: #111;
+
+      font-size: 25px;
+
+      font-weight: 900;
+
+      box-shadow:
+        0 3px 10px
+        rgba(0,0,0,.35);
+    }
+
+
+    .judge-label {
+
+      flex: 1;
+
+      text-align: left;
+
+      padding-left: 19px;
+
+      font-size: 21px;
+
+      font-weight: 900;
+
+      letter-spacing: .5px;
+    }
+
+
+    .judge-arrow {
+
+      font-size: 37px;
+
+      font-weight: 300;
+
+      color: #aaa;
+
+      line-height: 1;
+
+      padding-left: 8px;
+    }
+
+
+    .selection-footer {
+
+      margin-top: 25px;
+
+      color: #999;
+
+      font-size: 14px;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      gap: 8px;
+    }
+
+
+    .active-dot {
+
+      width: 9px;
+
+      height: 9px;
+
+      display: inline-block;
+
+      border-radius: 50%;
+
+      background: #48d597;
+
+      box-shadow:
+        0 0 10px
+        rgba(
+          72,
+          213,
+          151,
+          .55
+        );
     }
 
 
@@ -502,59 +1095,170 @@
         padding: 8px;
       }
 
+
       .brand {
         font-size: 25px;
       }
+
 
       .brand-sub {
         font-size: 12px;
       }
 
+
       .judge-badge {
+
         font-size: 16px;
+
         min-height: 38px;
       }
 
+
       .card {
+
         padding: 14px;
+
         border-radius: 15px;
       }
 
+
       .performance-card {
-        padding: 17px 12px 19px;
+
+        padding:
+          17px
+          12px
+          19px;
       }
 
+
       .contestant-name {
+
         font-size: 28px;
       }
 
+
       .criterion {
+
         padding: 12px;
       }
 
+
       .criterion-name {
+
         font-size: 16px;
       }
 
+
       .score-buttons {
+
         grid-template-columns:
-          repeat(6, minmax(0, 1fr));
+          repeat(
+            6,
+            minmax(0,1fr)
+          );
+
         gap: 6px;
       }
 
+
       .score-btn {
+
         min-height: 48px;
+
         font-size: 16px;
       }
 
+
       .total-score {
+
         font-size: 52px;
       }
 
+
       .submit-btn {
+
         min-height: 60px;
+
         font-size: 19px;
       }
+
+
+      /* Judge Selection */
+
+      .judge-selection-card {
+
+        padding:
+          28px
+          15px
+          25px;
+      }
+
+
+      .selection-icon {
+
+        width: 60px;
+
+        height: 60px;
+
+        font-size: 28px;
+
+        margin-bottom: 16px;
+      }
+
+
+      .selection-title {
+
+        font-size: 22px;
+      }
+
+
+      .selection-subtitle {
+
+        font-size: 15px;
+
+        margin-bottom: 24px;
+      }
+
+
+      .judge-selection-buttons {
+
+        gap: 12px;
+      }
+
+
+      .judge-selection-btn {
+
+        min-height: 70px;
+
+        padding:
+          8px
+          13px;
+      }
+
+
+      .judge-number {
+
+        width: 50px;
+
+        height: 50px;
+
+        font-size: 23px;
+      }
+
+
+      .judge-label {
+
+        padding-left: 15px;
+
+        font-size: 19px;
+      }
+
+
+      .judge-arrow {
+
+        font-size: 32px;
+      }
+
     }
 
 
@@ -565,22 +1269,64 @@
     @media (max-width: 380px) {
 
       .contestant-name {
+
         font-size: 24px;
       }
 
+
       .score-btn {
+
         min-height: 44px;
+
         font-size: 15px;
       }
 
+
       .total-score {
+
         font-size: 46px;
       }
 
+
       .submit-btn {
+
         min-height: 56px;
+
         font-size: 18px;
       }
+
+
+      .selection-title {
+
+        font-size: 20px;
+      }
+
+
+      .selection-subtitle {
+
+        font-size: 14px;
+      }
+
+
+      .judge-selection-btn {
+
+        min-height: 64px;
+      }
+
+
+      .judge-number {
+
+        width: 46px;
+
+        height: 46px;
+      }
+
+
+      .judge-label {
+
+        font-size: 18px;
+      }
+
     }
 
 
@@ -593,25 +1339,67 @@
       and (min-width: 700px) {
 
       .app {
+
         max-width: 1000px;
       }
 
+
       .header {
+
         padding-bottom: 10px;
       }
 
+
       .contestant-name {
+
         font-size: 30px;
       }
 
+
       .score-btn {
+
         min-height: 44px;
+      }
+
+
+      /* Judge Selection */
+
+      .judge-selection-card {
+
+        padding:
+          30px
+          40px
+          25px;
+      }
+
+
+      .judge-selection-buttons {
+
+        display: grid;
+
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0,1fr)
+          );
+
+        gap: 14px;
+
+        max-width: 720px;
+      }
+
+
+      .selection-subtitle {
+
+        margin-bottom: 24px;
       }
 
     }
 
   </style>
+
 </head>
+
 
 <body>
 
@@ -645,4 +1433,5 @@
   ></script>
 
 </body>
+
 </html>
