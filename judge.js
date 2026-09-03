@@ -89,7 +89,15 @@ const E = value =>
   );
 
 /* =========================================================
-   GET JUDGE FROM URL
+   GET JUDGE FROM URL / SAVED STATION
+   =========================================================
+
+   First visit:
+     judge.html?judge=1
+
+   The selected station is then saved locally.
+
+   Future visits can remember the station.
    ========================================================= */
 
 function getJudgeFromUrl() {
@@ -104,13 +112,42 @@ function getJudgeFromUrl() {
       params.get("judge")
     );
 
+  /*
+    If a valid judge number is supplied
+    in the URL, use it and remember it.
+  */
+
   if (
     number >= 1 &&
     number <= 5
   ) {
 
-    return `j${number}`;
+    const id = `j${number}`;
 
+    localStorage.setItem(
+      "rk_station_judge",
+      id
+    );
+
+    return id;
+  }
+
+  /*
+    Otherwise use the judge previously
+    saved on this tablet.
+  */
+
+  const saved =
+    localStorage.getItem(
+      "rk_station_judge"
+    );
+
+  if (
+    saved &&
+    J[saved]
+  ) {
+
+    return saved;
   }
 
   return null;
@@ -162,18 +199,6 @@ function isJudgeActive() {
 
 /* =========================================================
    ACTIVE CONTESTANT
-   =========================================================
-
-   IMPORTANT:
-
-   Your existing app stores:
-
-   event.active = contestant ID
-
-   The actual contestant information is stored at:
-
-   event.contestants[event.active]
-
    ========================================================= */
 
 function activeContestant() {
@@ -224,12 +249,6 @@ function getTeamName(contestant) {
     return "";
   }
 
-  /*
-    New format:
-    contestant.team contains
-    the actual team name.
-  */
-
   if (
     contestant.team
   ) {
@@ -237,10 +256,6 @@ function getTeamName(contestant) {
     return contestant.team;
 
   }
-
-  /*
-    Backup for teamId format.
-  */
 
   if (
     contestant.teamId &&
@@ -337,24 +352,22 @@ function header() {
   const judge =
     currentJudge();
 
+  const stationNumber =
+    judge?.no || "?";
+
   return `
     <div class="header">
 
-      <h1>
+      <div class="brand">
         ROYAL KARAOKE SKN
-      </h1>
+      </div>
 
-      <p>
+      <div class="brand-sub">
         DIGITAL JUDGING SYSTEM
-      </p>
+      </div>
 
       <div class="judge-badge">
-
-        ${E(
-          judge?.name ||
-          "Judge"
-        )}
-
+        JUDGE STATION ${E(stationNumber)}
       </div>
 
     </div>
@@ -373,6 +386,10 @@ function waiting() {
     ${header()}
 
     <div class="card waiting">
+
+      <div class="waiting-icon">
+        🎤
+      </div>
 
       <h2>
         WAITING FOR PERFORMANCE
@@ -403,19 +420,13 @@ function inactive() {
 
   root.innerHTML = `
 
-    <div class="header">
-
-      <h1>
-        ROYAL KARAOKE SKN
-      </h1>
-
-      <p>
-        DIGITAL JUDGING SYSTEM
-      </p>
-
-    </div>
+    ${header()}
 
     <div class="card waiting">
+
+      <div class="waiting-icon">
+        ⚠️
+      </div>
 
       <h2>
         JUDGE NOT ACTIVE
@@ -451,13 +462,21 @@ function errorScreen(
 
     <div class="header">
 
-      <h1>
+      <div class="brand">
         ROYAL KARAOKE SKN
-      </h1>
+      </div>
+
+      <div class="brand-sub">
+        DIGITAL JUDGING SYSTEM
+      </div>
 
     </div>
 
     <div class="card waiting">
+
+      <div class="waiting-icon">
+        ⚠️
+      </div>
 
       <h2>
         CONNECTION ERROR
@@ -498,6 +517,10 @@ function submittedScreen(
 
     <div class="card submitted">
 
+      <div class="submitted-icon">
+        ✓
+      </div>
+
       <div class="performance-number">
 
         PERFORMANCE #
@@ -519,7 +542,7 @@ function submittedScreen(
 
       <div class="details">
 
-        <div>
+        <div class="detail-pill">
           <strong>
             Category:
           </strong>
@@ -529,7 +552,7 @@ function submittedScreen(
           )}
         </div>
 
-        <div>
+        <div class="detail-pill">
           <strong>
             Team:
           </strong>
@@ -540,7 +563,7 @@ function submittedScreen(
           )}
         </div>
 
-        <div>
+        <div class="detail-pill">
           <strong>
             Song:
           </strong>
@@ -561,19 +584,27 @@ function submittedScreen(
 
       </div>
 
-      <p>
-        / ${MAX_TOTAL}
-      </p>
+      <div class="final-number-label">
+        / ${MAX_TOTAL} POINTS
+      </div>
 
-      <p>
+      <div class="locked-message">
+
+        <strong>
+          ✓ SCORE LOCKED
+        </strong>
+
+        <br>
+
         Your score has been recorded
-        and is locked.
-      </p>
+        and cannot be changed.
 
-      <p>
+        <br><br>
+
         Please wait for the next
         performance.
-      </p>
+
+      </div>
 
     </div>
 
@@ -650,9 +681,9 @@ function scoringScreen(
 
               </div>
 
-              <div class="criterion-max">
+              <div class="criterion-score">
 
-                Max ${max}
+                ${selected}/${max}
 
               </div>
 
@@ -675,7 +706,7 @@ function scoringScreen(
 
     ${header()}
 
-    <div class="card">
+    <div class="card performance-card">
 
       <div class="performance-number">
 
@@ -694,7 +725,7 @@ function scoringScreen(
 
       <div class="details">
 
-        <div>
+        <div class="detail-pill">
 
           <strong>
             Category:
@@ -706,7 +737,7 @@ function scoringScreen(
 
         </div>
 
-        <div>
+        <div class="detail-pill">
 
           <strong>
             Team:
@@ -719,7 +750,7 @@ function scoringScreen(
 
         </div>
 
-        <div>
+        <div class="detail-pill">
 
           <strong>
             Song:
@@ -734,6 +765,22 @@ function scoringScreen(
 
       </div>
 
+    </div>
+
+    <div class="card">
+
+      <div class="scoring-heading">
+
+        <h2>
+          JUDGING SCORE
+        </h2>
+
+        <div class="max-points">
+          MAX ${MAX_TOTAL}
+        </div>
+
+      </div>
+
       <div class="criteria">
 
         ${criteria}
@@ -743,14 +790,13 @@ function scoringScreen(
       <div class="total-box">
 
         <div class="total-label">
-
           CURRENT TOTAL
-
         </div>
 
         <div class="total-score">
 
-          ${total} / ${MAX_TOTAL}
+          ${total}
+          <span>/ ${MAX_TOTAL}</span>
 
         </div>
 
@@ -767,7 +813,7 @@ function scoringScreen(
         type="button"
       >
 
-        SUBMIT SCORE
+        SUBMIT SCORE — LOCK IT
 
       </button>
 
@@ -1170,8 +1216,8 @@ async function start() {
   if (!judgeId) {
 
     errorScreen(
-      "No valid judge number was supplied.\n\n" +
-      "Use ?judge=1, ?judge=2, ?judge=3, etc."
+      "No judge station has been assigned.\n\n" +
+      "Open this page once using ?judge=1, ?judge=2 or ?judge=3."
     );
 
     return;
