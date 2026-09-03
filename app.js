@@ -1521,7 +1521,55 @@ function existingTeams() {
     </div>
   `;
 }
+/* =========================================================
+   TEAM OPTIONS FOR DUET REGISTRATION
+   ========================================================= */
 
+function teamOptions(selected = "") {
+
+  const list = teams();
+
+  return `
+    <option value="">
+      Select Team
+    </option>
+
+    ${list
+      .map(team => `
+        <option
+          value="${E(team.id)}"
+          ${
+            selected === team.id
+              ? "selected"
+              : ""
+          }
+        >
+          ${E(
+            team.teamId ||
+            (
+              typeof D.teams?.[team.id] === "object"
+                ? D.teams[team.id].teamId || ""
+                : ""
+            )
+          )}
+          ${
+            (
+              team.teamId ||
+              (
+                typeof D.teams?.[team.id] === "object"
+                  ? D.teams[team.id].teamId || ""
+                  : ""
+              )
+            )
+              ? " — "
+              : ""
+          }
+          ${E(team.name)}
+        </option>
+      `)
+      .join("")}
+  `;
+}
 /* =========================================================
    DUET REGISTRATION
    ========================================================= */
