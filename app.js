@@ -37,10 +37,6 @@ if (!root) {
   throw new Error("The #app element was not found in index.html.");
 }
 
-
-// Show something immediately.
-// This prevents the page from appearing completely blank while
-// Firebase is connecting.
 root.innerHTML = `
   <div class="app">
     <div class="card" style="max-width:700px;margin:60px auto;text-align:center;">
@@ -76,8 +72,9 @@ try {
       <div class="card error-card" style="max-width:800px;margin:60px auto;">
         <h2>Firebase Initialization Error</h2>
         <p>The judging system could not start.</p>
-        <pre style="white-space:pre-wrap;">${escapeHTML(error.message || String(error))}</pre>
-        <p>Please check your Firebase configuration.</p>
+        <pre style="white-space:pre-wrap;">
+${escapeHTML(error.message || String(error))}
+        </pre>
       </div>
     </div>
   `;
@@ -110,6 +107,7 @@ let draftPerformanceId = null;
 // ============================================================
 
 const CRITERIA = {
+
   voiceManagement: {
     label: "Voice Management",
     max: 10
@@ -139,6 +137,7 @@ const CRITERIA = {
     label: "Crowd Response",
     max: 20
   }
+
 };
 
 
@@ -147,6 +146,7 @@ const CRITERIA = {
 // ============================================================
 
 const JUDGES = {
+
   j1: {
     name: "Judge 1"
   },
@@ -166,6 +166,7 @@ const JUDGES = {
   j5: {
     name: "Judge 5"
   }
+
 };
 
 
@@ -179,47 +180,6 @@ const CATEGORIES = [
   "Duet",
   "Team"
 ];
-
-
-// ============================================================
-// DEMO CONTESTANTS
-// ============================================================
-
-const DEMO_CONTESTANTS = {
-
-  c1: {
-    id: "c1",
-    name: "Demo Male",
-    category: "Male",
-    song: "Demo Song",
-    draw: 1
-  },
-
-  c2: {
-    id: "c2",
-    name: "Demo Female",
-    category: "Female",
-    song: "Demo Song",
-    draw: 2
-  },
-
-  c3: {
-    id: "c3",
-    name: "Demo Duet",
-    category: "Duet",
-    song: "Demo Song",
-    draw: 3
-  },
-
-  c4: {
-    id: "c4",
-    name: "Demo Team",
-    category: "Team",
-    song: "Demo Song",
-    draw: 4
-  }
-
-};
 
 
 // ============================================================
@@ -282,9 +242,7 @@ function judgeCount() {
 
 function enabledJudges() {
 
-  const count = judgeCount();
-
-  return Object.keys(JUDGES).slice(0, count);
+  return Object.keys(JUDGES).slice(0, judgeCount());
 
 }
 
@@ -292,7 +250,11 @@ function enabledJudges() {
 function contestants() {
 
   return Object.values(D.contestants || {})
-    .sort((a, b) => Number(a.draw || 9999) - Number(b.draw || 9999));
+    .sort(
+      (a, b) =>
+        Number(a.draw || 9999) -
+        Number(b.draw || 9999)
+    );
 
 }
 
@@ -310,7 +272,7 @@ function activeContestant() {
     return null;
   }
 
-  return (D.contestants || {})[D.active] || null;
+  return D.contestants?.[D.active] || null;
 
 }
 
@@ -332,17 +294,15 @@ function totalDraft() {
 
 function performanceScore(contestantId) {
 
-  const allScores = scores();
-
-  const contestantScores = allScores[contestantId] || {};
-
-  const judgeIds = enabledJudges();
+  const contestantScores =
+    scores()[contestantId] || {};
 
   const totals = [];
 
-  judgeIds.forEach(judgeId => {
+  enabledJudges().forEach(judgeId => {
 
-    const score = contestantScores[judgeId];
+    const score =
+      contestantScores[judgeId];
 
     if (!score) {
       return;
@@ -364,7 +324,51 @@ function performanceScore(contestantId) {
     return null;
   }
 
-  return totals.reduce((a, b) => a + b, 0) / totals.length;
+  return (
+    totals.reduce(
+      (a, b) => a + b,
+      0
+    ) / totals.length
+  );
+
+}
+
+
+// ============================================================
+// PARTICIPANT DISPLAY
+// ============================================================
+
+function participantText(contestant) {
+
+  if (
+    !contestant ||
+    !Array.isArray(contestant.participants)
+  ) {
+    return "";
+  }
+
+  return contestant.participants
+    .filter(x => String(x).trim())
+    .join(" • ");
+
+}
+
+
+function participantHTML(contestant) {
+
+  const text =
+    participantText(contestant);
+
+  if (!text) {
+    return "";
+  }
+
+  return `
+    <div style="margin-top:8px;">
+      <strong>Performers:</strong>
+      ${escapeHTML(text)}
+    </div>
+  `;
 
 }
 
@@ -398,7 +402,7 @@ function logout() {
 // HEADER
 // ============================================================
 
-function head(title = "Royal Karaoke SKN") {
+function head() {
 
   return `
 
@@ -418,9 +422,13 @@ function head(title = "Royal Karaoke SKN") {
 
       ${
         role === "judge"
-          ? `<div class="role-badge">
-              ${escapeHTML(JUDGES[jid]?.name || "Judge")}
-             </div>`
+          ? `
+            <div class="role-badge">
+              ${escapeHTML(
+                JUDGES[jid]?.name || "Judge"
+              )}
+            </div>
+          `
           : ""
       }
 
@@ -473,7 +481,7 @@ function nav() {
 
 
 // ============================================================
-// LOGIN PAGE
+// LOGIN
 // ============================================================
 
 function login() {
@@ -519,13 +527,15 @@ function login() {
 
             ${
               Object.entries(JUDGES)
-                .map(([id, judge]) => `
-                  <button
-                    class="judge-login jl"
-                    data-judge="${id}">
-                    ${escapeHTML(judge.name)}
-                  </button>
-                `)
+                .map(
+                  ([id, judge]) => `
+                    <button
+                      class="judge-login jl"
+                      data-judge="${id}">
+                      ${escapeHTML(judge.name)}
+                    </button>
+                  `
+                )
                 .join("")
             }
 
@@ -548,15 +558,23 @@ function login() {
 
 function dashboard() {
 
-  const active = activeContestant();
+  const active =
+    activeContestant();
 
-  const count = contestants().length;
+  const count =
+    contestants().length;
 
-  const judgeTotal = judgeCount();
+  const judgeTotal =
+    judgeCount();
 
-  const submitted = active
-    ? enabledJudges().filter(j => scores()[active.id]?.[j]).length
-    : 0;
+  const submitted =
+    active
+      ? enabledJudges()
+          .filter(
+            j =>
+              scores()[active.id]?.[j]
+          ).length
+      : 0;
 
 
   return `
@@ -574,12 +592,25 @@ function dashboard() {
         </h1>
 
         <p>
-          ${escapeHTML(D.name || "Royal Karaoke SKN Championship")}
+          ${escapeHTML(
+            D.name ||
+            "Royal Karaoke SKN Championship"
+          )}
         </p>
 
         <p>
-          ${escapeHTML(D.venue || "Venue TBD")}
-          ${D.date ? " • " + escapeHTML(D.date) : ""}
+          ${escapeHTML(
+            D.venue ||
+            "Venue TBD"
+          )}
+
+          ${
+            D.date
+              ? " • " +
+                escapeHTML(D.date)
+              : ""
+          }
+
         </p>
 
       </div>
@@ -620,7 +651,11 @@ function dashboard() {
           </h3>
 
           <strong>
-            ${active ? escapeHTML(active.name) : "None"}
+            ${
+              active
+                ? escapeHTML(active.name)
+                : "None"
+            }
           </strong>
 
         </div>
@@ -633,7 +668,11 @@ function dashboard() {
           </h3>
 
           <strong>
-            ${active ? `${submitted}/${judgeTotal}` : "—"}
+            ${
+              active
+                ? `${submitted}/${judgeTotal}`
+                : "—"
+            }
           </strong>
 
         </div>
@@ -641,32 +680,34 @@ function dashboard() {
       </div>
 
 
-      <div class="card">
+      ${
+        active
+          ? `
+            <div class="card">
 
-        <h2>
-          Performance Control
-        </h2>
+              <h2>
+                Current Performance
+              </h2>
 
+              <h2>
+                #${escapeHTML(active.draw)}
+                —
+                ${escapeHTML(active.name)}
+              </h2>
 
-        ${
-          active
-            ? `
+              <p>
+                ${escapeHTML(active.category)}
+                ${
+                  active.song
+                    ? " • " +
+                      escapeHTML(active.song)
+                    : ""
+                }
+              </p>
 
-              <div class="active-performance">
+              ${participantHTML(active)}
 
-                <h2>
-                  #${escapeHTML(active.draw)}
-                  —
-                  ${escapeHTML(active.name)}
-                </h2>
-
-                <p>
-                  ${escapeHTML(active.category)}
-                  ${active.song ? " • " + escapeHTML(active.song) : ""}
-                </p>
-
-              </div>
-
+              <br>
 
               <button
                 id="clearActive"
@@ -674,17 +715,10 @@ function dashboard() {
                 END ACTIVE PERFORMANCE
               </button>
 
-            `
-            : `
-
-              <p>
-                Select a contestant below to activate their performance.
-              </p>
-
-            `
-        }
-
-      </div>
+            </div>
+          `
+          : ""
+      }
 
 
       <div class="card">
@@ -701,20 +735,31 @@ function dashboard() {
 
           ${
             contestants()
-              .map(c => `
-                <option
-                  value="${escapeHTML(c.id)}"
-                  ${D.active === c.id ? "selected" : ""}>
-                  #${escapeHTML(c.draw)}
-                  — ${escapeHTML(c.name)}
-                  — ${escapeHTML(c.category)}
-                </option>
-              `)
+              .map(
+                c => `
+                  <option
+                    value="${escapeHTML(c.id)}"
+                    ${
+                      D.active === c.id
+                        ? "selected"
+                        : ""
+                    }>
+
+                    #${escapeHTML(c.draw)}
+                    —
+                    ${escapeHTML(c.name)}
+                    —
+                    ${escapeHTML(c.category)}
+
+                  </option>
+                `
+              )
               .join("")
           }
 
         </select>
 
+        <br><br>
 
         <button
           id="activateBtn"
@@ -757,12 +802,13 @@ function dashboard() {
 
 
 // ============================================================
-// CONTESTANTS PAGE
+// CONTESTANT REGISTRATION PAGE
 // ============================================================
 
 function contestantsPage() {
 
-  const list = contestants();
+  const list =
+    contestants();
 
 
   return `
@@ -779,51 +825,186 @@ function contestantsPage() {
           Contestant Registration
         </h1>
 
-        <div class="form-grid">
+        <p>
+          Register a single singer, duet, or complete team.
+        </p>
+
+
+        <!-- REGISTRATION TYPE -->
+
+        <label>
+          <strong>Registration Type</strong>
+        </label>
+
+        <select id="registrationType">
+
+          <option value="Male">
+            Male Singer
+          </option>
+
+          <option value="Female">
+            Female Singer
+          </option>
+
+          <option value="Duet">
+            Duet — 2 Singers
+          </option>
+
+          <option value="Team">
+            Team — 5 Participants
+          </option>
+
+        </select>
+
+
+        <br><br>
+
+
+        <!-- SINGLE SINGER -->
+
+        <div
+          id="singleRegistration"
+          class="registration-section">
+
+          <h2>
+            Single Singer
+          </h2>
+
+          <div class="form-grid">
+
+            <input
+              id="singleName"
+              type="text"
+              placeholder="Singer's Full Name"
+            />
+
+          </div>
+
+        </div>
+
+
+        <!-- DUET -->
+
+        <div
+          id="duetRegistration"
+          class="registration-section"
+          style="display:none;">
+
+          <h2>
+            Duet Registration
+          </h2>
+
+          <div class="form-grid">
+
+            <input
+              id="duetName1"
+              type="text"
+              placeholder="Singer 1 — Full Name"
+            />
+
+            <input
+              id="duetName2"
+              type="text"
+              placeholder="Singer 2 — Full Name"
+            />
+
+          </div>
+
+          <p class="muted">
+            Both singers will be registered together as one duet.
+          </p>
+
+        </div>
+
+
+        <!-- TEAM -->
+
+        <div
+          id="teamRegistration"
+          class="registration-section"
+          style="display:none;">
+
+          <h2>
+            Team of 5
+          </h2>
 
           <input
-            id="newName"
+            id="teamName"
             type="text"
-            placeholder="Contestant / Team Name"
+            placeholder="Team Name"
           />
 
+          <br><br>
 
-          <select id="newCategory">
+          <div class="form-grid">
 
-            <option value="">
-              Select Category
-            </option>
+            <input
+              id="teamMember1"
+              type="text"
+              placeholder="Participant 1"
+            />
 
-            ${
-              CATEGORIES
-                .map(c => `
-                  <option value="${c}">
-                    ${c}
-                  </option>
-                `)
-                .join("")
-            }
+            <input
+              id="teamMember2"
+              type="text"
+              placeholder="Participant 2"
+            />
 
-          </select>
+            <input
+              id="teamMember3"
+              type="text"
+              placeholder="Participant 3"
+            />
 
+            <input
+              id="teamMember4"
+              type="text"
+              placeholder="Participant 4"
+            />
+
+            <input
+              id="teamMember5"
+              type="text"
+              placeholder="Participant 5"
+            />
+
+          </div>
+
+          <p class="muted">
+            Enter all five team members before registering.
+          </p>
+
+        </div>
+
+
+        <!-- SONG -->
+
+        <div style="margin-top:20px;">
 
           <input
             id="newSong"
             type="text"
             placeholder="Song Title"
+            style="width:100%;"
           />
 
         </div>
 
 
+        <br>
+
         <button
           id="registerBtn"
           class="primary">
-          REGISTER CONTESTANT
+
+          REGISTER
+
         </button>
 
       </div>
 
+
+      <!-- REGISTERED CONTESTANTS -->
 
       <div class="card">
 
@@ -835,7 +1016,11 @@ function contestantsPage() {
         ${
           list.length === 0
 
-            ? `<p>No contestants registered yet.</p>`
+            ? `
+              <p>
+                No contestants registered yet.
+              </p>
+            `
 
             : `
 
@@ -860,6 +1045,10 @@ function contestantsPage() {
                       </th>
 
                       <th>
+                        Participants
+                      </th>
+
+                      <th>
                         Song
                       </th>
 
@@ -875,39 +1064,64 @@ function contestantsPage() {
                   <tbody>
 
                     ${
-                      list.map(c => `
+                      list
+                        .map(
+                          c => `
 
-                        <tr>
+                            <tr>
 
-                          <td>
-                            ${escapeHTML(c.draw)}
-                          </td>
+                              <td>
+                                ${escapeHTML(c.draw)}
+                              </td>
 
-                          <td>
-                            ${escapeHTML(c.name)}
-                          </td>
+                              <td>
+                                <strong>
+                                  ${escapeHTML(c.name)}
+                                </strong>
+                              </td>
 
-                          <td>
-                            ${escapeHTML(c.category)}
-                          </td>
+                              <td>
+                                ${escapeHTML(c.category)}
+                              </td>
 
-                          <td>
-                            ${escapeHTML(c.song || "")}
-                          </td>
+                              <td>
 
-                          <td>
+                                ${
+                                  Array.isArray(
+                                    c.participants
+                                  )
+                                    ? c.participants
+                                        .map(
+                                          (p, i) =>
+                                            `${i + 1}. ${escapeHTML(p)}`
+                                        )
+                                        .join("<br>")
+                                    : "—"
+                                }
 
-                            <button
-                              class="danger delete-contestant"
-                              data-id="${escapeHTML(c.id)}">
-                              DELETE
-                            </button>
+                              </td>
 
-                          </td>
+                              <td>
+                                ${escapeHTML(c.song || "")}
+                              </td>
 
-                        </tr>
+                              <td>
 
-                      `).join("")
+                                <button
+                                  class="danger delete-contestant"
+                                  data-id="${escapeHTML(c.id)}">
+
+                                  DELETE
+
+                                </button>
+
+                              </td>
+
+                            </tr>
+
+                          `
+                        )
+                        .join("")
                     }
 
                   </tbody>
@@ -934,7 +1148,9 @@ function contestantsPage() {
 
 function live() {
 
-  const active = activeContestant();
+  const active =
+    activeContestant();
+
 
   if (!active) {
 
@@ -965,9 +1181,8 @@ function live() {
   }
 
 
-  const contestantScores = scores()[active.id] || {};
-
-  const judgeIds = enabledJudges();
+  const contestantScores =
+    scores()[active.id] || {};
 
 
   return `
@@ -992,8 +1207,16 @@ function live() {
 
         <p>
           ${escapeHTML(active.category)}
-          ${active.song ? " • " + escapeHTML(active.song) : ""}
+
+          ${
+            active.song
+              ? " • " +
+                escapeHTML(active.song)
+              : ""
+          }
         </p>
+
+        ${participantHTML(active)}
 
       </div>
 
@@ -1008,57 +1231,68 @@ function live() {
         <div class="scoreboard">
 
           ${
-            judgeIds.map(j => {
+            enabledJudges()
+              .map(j => {
 
-              const score = contestantScores[j];
+                const score =
+                  contestantScores[j];
 
-              if (!score) {
+
+                if (!score) {
+
+                  return `
+
+                    <div class="judge-score">
+
+                      <h3>
+                        ${escapeHTML(
+                          JUDGES[j].name
+                        )}
+                      </h3>
+
+                      <p>
+                        Waiting for score...
+                      </p>
+
+                    </div>
+
+                  `;
+
+                }
+
+
+                let total = 0;
+
+                Object.keys(CRITERIA)
+                  .forEach(k => {
+
+                    total += Number(
+                      score[k] || 0
+                    );
+
+                  });
+
 
                 return `
 
                   <div class="judge-score">
 
                     <h3>
-                      ${escapeHTML(JUDGES[j].name)}
+                      ${escapeHTML(
+                        JUDGES[j].name
+                      )}
                     </h3>
 
-                    <p>
-                      Waiting for score...
-                    </p>
+                    <strong>
+                      ${total} / 100
+                    </strong>
 
                   </div>
 
                 `;
 
-              }
-
-
-              let total = 0;
-
-              Object.keys(CRITERIA).forEach(k => {
-
-                total += Number(score[k] || 0);
-
-              });
-
-
-              return `
-
-                <div class="judge-score">
-
-                  <h3>
-                    ${escapeHTML(JUDGES[j].name)}
-                  </h3>
-
-                  <strong>
-                    ${total} / 100
-                  </strong>
-
-                </div>
-
-              `;
-
-            }).join("")
+              })
+              .join("")
           }
 
         </div>
@@ -1071,11 +1305,15 @@ function live() {
           </span>
 
           <strong>
+
             ${
               performanceScore(active.id) === null
                 ? "—"
-                : performanceScore(active.id).toFixed(2)
+                : performanceScore(
+                    active.id
+                  ).toFixed(2)
             }
+
           </strong>
 
         </div>
@@ -1095,21 +1333,30 @@ function live() {
 
 function results() {
 
-  const list = contestants();
+  const list =
+    contestants();
 
-  const rows = list
-    .map(c => {
 
-      const score = performanceScore(c.id);
+  const rows =
+    list
+      .map(c => {
 
-      return {
-        contestant: c,
-        score
-      };
+        const score =
+          performanceScore(c.id);
 
-    })
-    .filter(x => x.score !== null)
-    .sort((a, b) => b.score - a.score);
+        return {
+          contestant: c,
+          score
+        };
+
+      })
+      .filter(
+        x => x.score !== null
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score
+      );
 
 
   return `
@@ -1138,7 +1385,11 @@ function results() {
         ${
           rows.length === 0
 
-            ? `<p>No completed scores yet.</p>`
+            ? `
+              <p>
+                No completed scores yet.
+              </p>
+            `
 
             : `
 
@@ -1178,35 +1429,68 @@ function results() {
                   <tbody>
 
                     ${
-                      rows.map((row, index) => `
+                      rows
+                        .map(
+                          (row, index) => `
 
-                        <tr>
+                            <tr>
 
-                          <td>
-                            ${index + 1}
-                          </td>
+                              <td>
+                                ${index + 1}
+                              </td>
 
-                          <td>
-                            ${escapeHTML(row.contestant.draw)}
-                          </td>
+                              <td>
+                                ${escapeHTML(
+                                  row.contestant.draw
+                                )}
+                              </td>
 
-                          <td>
-                            ${escapeHTML(row.contestant.name)}
-                          </td>
+                              <td>
 
-                          <td>
-                            ${escapeHTML(row.contestant.category)}
-                          </td>
+                                <strong>
+                                  ${escapeHTML(
+                                    row.contestant.name
+                                  )}
+                                </strong>
 
-                          <td>
-                            <strong>
-                              ${row.score.toFixed(2)}
-                            </strong>
-                          </td>
+                                ${
+                                  participantText(
+                                    row.contestant
+                                  )
+                                    ? `
+                                      <br>
+                                      <small>
+                                        ${escapeHTML(
+                                          participantText(
+                                            row.contestant
+                                          )
+                                        )}
+                                      </small>
+                                    `
+                                    : ""
+                                }
 
-                        </tr>
+                              </td>
 
-                      `).join("")
+                              <td>
+                                ${escapeHTML(
+                                  row.contestant.category
+                                )}
+                              </td>
+
+                              <td>
+
+                                <strong>
+                                  ${row.score.toFixed(2)}
+                                </strong>
+
+                              </td>
+
+                            </tr>
+
+                          `
+                        )
+                        .join("")
                     }
 
                   </tbody>
@@ -1257,23 +1541,41 @@ function settings() {
 
           <option
             value="3"
-            ${judgeCount() === 3 ? "selected" : ""}>
+            ${
+              judgeCount() === 3
+                ? "selected"
+                : ""
+            }>
+
             3 Judges
+
           </option>
+
 
           <option
             value="5"
-            ${judgeCount() === 5 ? "selected" : ""}>
+            ${
+              judgeCount() === 5
+                ? "selected"
+                : ""
+            }>
+
             5 Judges
+
           </option>
 
         </select>
 
 
+        <br><br>
+
+
         <button
           id="saveJudgeCount"
           class="primary">
+
           SAVE JUDGE COUNT
+
         </button>
 
       </div>
@@ -1290,21 +1592,25 @@ function settings() {
 
           ${
             Object.entries(CRITERIA)
-              .map(([key, item]) => `
+              .map(
+                ([key, item]) => `
 
-                <div class="criteria-row">
+                  <div class="criteria-row">
 
-                  <span>
-                    ${escapeHTML(item.label)}
-                  </span>
+                    <span>
+                      ${escapeHTML(
+                        item.label
+                      )}
+                    </span>
 
-                  <strong>
-                    ${item.max} pts
-                  </strong>
+                    <strong>
+                      ${item.max} pts
+                    </strong>
 
-                </div>
+                  </div>
 
-              `)
+                `
+              )
               .join("")
           }
 
@@ -1340,7 +1646,9 @@ function settings() {
         <button
           id="resetCompetition"
           class="danger">
+
           RESET COMPETITION
+
         </button>
 
       </div>
@@ -1356,7 +1664,10 @@ function settings() {
 // SCORE BUTTONS
 // ============================================================
 
-function scoreButtons(key, max) {
+function scoreButtons(
+  key,
+  max
+) {
 
   let html = `
 
@@ -1365,7 +1676,9 @@ function scoreButtons(key, max) {
       <div class="score-category-title">
 
         <span>
-          ${escapeHTML(CRITERIA[key].label)}
+          ${escapeHTML(
+            CRITERIA[key].label
+          )}
         </span>
 
         <strong>
@@ -1380,13 +1693,23 @@ function scoreButtons(key, max) {
   `;
 
 
-  for (let i = 0; i <= max; i++) {
+  for (
+    let i = 0;
+    i <= max;
+    i++
+  ) {
 
     html += `
 
       <button
         type="button"
-        class="score-btn ${Number(draft[key] || 0) === i ? "selected" : ""}"
+        class="score-btn ${
+          Number(
+            draft[key] || 0
+          ) === i
+            ? "selected"
+            : ""
+        }"
         data-key="${key}"
         data-value="${i}">
 
@@ -1419,11 +1742,12 @@ function scoreButtons(key, max) {
 
 function judge() {
 
-  const active = activeContestant();
+  const active =
+    activeContestant();
 
 
   // ----------------------------------------------------------
-  // WAITING SCREEN
+  // WAITING
   // ----------------------------------------------------------
 
   if (!active) {
@@ -1432,7 +1756,7 @@ function judge() {
 
       <div class="app">
 
-        ${head("Judge")}
+        ${head()}
 
         <main class="container">
 
@@ -1454,7 +1778,10 @@ function judge() {
             <div class="judge-info">
 
               <strong>
-                ${escapeHTML(JUDGES[jid]?.name || "Judge")}
+                ${escapeHTML(
+                  JUDGES[jid]?.name ||
+                  "Judge"
+                )}
               </strong>
 
             </div>
@@ -1463,7 +1790,9 @@ function judge() {
             <button
               id="jwaitingLogout"
               class="secondary">
+
               RETURN TO LOGIN
+
             </button>
 
           </div>
@@ -1478,14 +1807,17 @@ function judge() {
 
 
   // ----------------------------------------------------------
-  // NEW PERFORMANCE
+  // RESET SCORE FOR NEW PERFORMANCE
   // ----------------------------------------------------------
 
-  if (draftPerformanceId !== active.id) {
+  if (
+    draftPerformanceId !== active.id
+  ) {
 
     draft = {};
 
-    draftPerformanceId = active.id;
+    draftPerformanceId =
+      active.id;
 
   }
 
@@ -1494,7 +1826,7 @@ function judge() {
 
     <div class="app">
 
-      ${head("Judge")}
+      ${head()}
 
 
       <main class="container">
@@ -1520,12 +1852,17 @@ function judge() {
 
           ${
             active.song
-              ? `<p>
-                   <strong>Song:</strong>
-                   ${escapeHTML(active.song)}
-                 </p>`
+              ? `
+                <p>
+                  <strong>Song:</strong>
+                  ${escapeHTML(active.song)}
+                </p>
+              `
               : ""
           }
+
+
+          ${participantHTML(active)}
 
         </div>
 
@@ -1539,8 +1876,12 @@ function judge() {
 
           ${
             Object.entries(CRITERIA)
-              .map(([key, item]) =>
-                scoreButtons(key, item.max)
+              .map(
+                ([key, item]) =>
+                  scoreButtons(
+                    key,
+                    item.max
+                  )
               )
               .join("")
           }
@@ -1553,10 +1894,13 @@ function judge() {
             </span>
 
             <strong>
+
               <span id="draftTotal">
                 ${totalDraft()}
               </span>
+
               / 100
+
             </strong>
 
           </div>
@@ -1601,17 +1945,25 @@ function judge() {
 async function activate(id) {
 
   if (!id) {
-    alert("Please select a contestant.");
+
+    alert(
+      "Please select a contestant."
+    );
+
     return;
+
   }
 
 
   try {
 
-    await update(ref(db, "event"), {
-      active: id,
-      finalized: false
-    });
+    await update(
+      ref(db, "event"),
+      {
+        active: id,
+        finalized: false
+      }
+    );
 
   } catch (error) {
 
@@ -1638,7 +1990,8 @@ async function submitScore() {
   }
 
 
-  const active = activeContestant();
+  const active =
+    activeContestant();
 
 
   if (!active) {
@@ -1665,10 +2018,16 @@ async function submitScore() {
   }
 
 
-  // Check that every criterion has a score.
-  const missing = Object.entries(CRITERIA)
-    .filter(([key]) => draft[key] === undefined)
-    .map(([, item]) => item.label);
+  const missing =
+    Object.entries(CRITERIA)
+      .filter(
+        ([key]) =>
+          draft[key] === undefined
+      )
+      .map(
+        ([, item]) =>
+          item.label
+      );
 
 
   if (missing.length) {
@@ -1683,10 +2042,14 @@ async function submitScore() {
   }
 
 
-  const total = totalDraft();
+  const total =
+    totalDraft();
 
 
-  if (total < 0 || total > 100) {
+  if (
+    total < 0 ||
+    total > 100
+  ) {
 
     alert(
       "The score must be between 0 and 100."
@@ -1707,22 +2070,43 @@ async function submitScore() {
     const scoreData = {
 
       voiceManagement:
-        Number(draft.voiceManagement || 0),
+        Number(
+          draft.voiceManagement || 0
+        ),
 
       voiceTiming:
-        Number(draft.voiceTiming || 0),
+        Number(
+          draft.voiceTiming || 0
+        ),
 
       costume:
-        Number(draft.costume || 0),
+        Number(
+          draft.costume || 0
+        ),
 
       props:
-        Number(draft.props || 0),
+        Number(
+          draft.props || 0
+        ),
 
       performance:
-        Number(draft.performance || 0),
+        Number(
+          draft.performance || 0
+        ),
 
       crowdResponse:
-        Number(draft.crowdResponse || 0),
+        Number(
+          draft.crowdResponse || 0
+        ),
+
+      total,
+
+      judgeId: jid,
+
+      judgeNo:
+        Number(
+          jid.replace("j", "")
+        ),
 
       submittedAt:
         Date.now()
@@ -1741,6 +2125,7 @@ async function submitScore() {
 
     submitting = false;
 
+
     alert(
       `Score submitted successfully.\n\n` +
       `${active.name}: ${total}/100`
@@ -1749,7 +2134,8 @@ async function submitScore() {
 
     draft = {};
 
-    draftPerformanceId = active.id;
+    draftPerformanceId =
+      active.id;
 
     render();
 
@@ -1777,35 +2163,27 @@ async function submitScore() {
 
 
 // ============================================================
-// REGISTER CONTESTANT
+// REGISTER CONTESTANT / DUET / TEAM
 // ============================================================
 
 async function registerContestant() {
 
-  const nameInput =
-    document.getElementById("newName");
+  const type =
+    document.getElementById(
+      "registrationType"
+    )?.value;
 
-  const categoryInput =
-    document.getElementById("newCategory");
-
-  const songInput =
-    document.getElementById("newSong");
-
-
-  const name =
-    nameInput?.value.trim();
-
-  const category =
-    categoryInput?.value;
 
   const song =
-    songInput?.value.trim();
+    document.getElementById(
+      "newSong"
+    )?.value.trim();
 
 
-  if (!name) {
+  if (!song) {
 
     alert(
-      "Please enter the contestant or team name."
+      "Please enter the song title."
     );
 
     return;
@@ -1813,16 +2191,192 @@ async function registerContestant() {
   }
 
 
-  if (!category) {
+  let name = "";
+
+  let participants = [];
+
+
+  // ----------------------------------------------------------
+  // SINGLE MALE OR FEMALE
+  // ----------------------------------------------------------
+
+  if (
+    type === "Male" ||
+    type === "Female"
+  ) {
+
+    name =
+      document.getElementById(
+        "singleName"
+      )?.value.trim();
+
+
+    if (!name) {
+
+      alert(
+        "Please enter the singer's full name."
+      );
+
+      return;
+
+    }
+
+    participants = [name];
+
+  }
+
+
+  // ----------------------------------------------------------
+  // DUET
+  // ----------------------------------------------------------
+
+  else if (type === "Duet") {
+
+    const p1 =
+      document.getElementById(
+        "duetName1"
+      )?.value.trim();
+
+    const p2 =
+      document.getElementById(
+        "duetName2"
+      )?.value.trim();
+
+
+    if (!p1 || !p2) {
+
+      alert(
+        "Please enter both duet singers."
+      );
+
+      return;
+
+    }
+
+
+    if (
+      p1.toLowerCase() ===
+      p2.toLowerCase()
+    ) {
+
+      alert(
+        "The two duet participants must be different people."
+      );
+
+      return;
+
+    }
+
+
+    participants = [
+      p1,
+      p2
+    ];
+
+
+    name =
+      `${p1} & ${p2}`;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // TEAM OF FIVE
+  // ----------------------------------------------------------
+
+  else if (type === "Team") {
+
+    const teamName =
+      document.getElementById(
+        "teamName"
+      )?.value.trim();
+
+
+    const members = [];
+
+
+    for (
+      let i = 1;
+      i <= 5;
+      i++
+    ) {
+
+      const value =
+        document.getElementById(
+          `teamMember${i}`
+        )?.value.trim();
+
+
+      if (!value) {
+
+        alert(
+          `Please enter Participant ${i}.`
+        );
+
+        return;
+
+      }
+
+
+      members.push(value);
+
+    }
+
+
+    if (!teamName) {
+
+      alert(
+        "Please enter the team name."
+      );
+
+      return;
+
+    }
+
+
+    const lower =
+      members.map(
+        x => x.toLowerCase()
+      );
+
+
+    if (
+      new Set(lower).size !==
+      lower.length
+    ) {
+
+      alert(
+        "A team cannot contain the same participant more than once."
+      );
+
+      return;
+
+    }
+
+
+    name =
+      teamName;
+
+    participants =
+      members;
+
+  }
+
+
+  else {
 
     alert(
-      "Please select a category."
+      "Please select a registration type."
     );
 
     return;
 
   }
 
+
+  // ----------------------------------------------------------
+  // NEXT DRAW NUMBER
+  // ----------------------------------------------------------
 
   const existing =
     contestants();
@@ -1839,14 +2393,22 @@ async function registerContestant() {
     ) + 1;
 
 
+  // ----------------------------------------------------------
+  // UNIQUE ID
+  // ----------------------------------------------------------
+
   const id =
     "c_" +
     Date.now() +
     "_" +
     Math.random()
       .toString(36)
-      .slice(2, 7);
+      .slice(2, 8);
 
+
+  // ----------------------------------------------------------
+  // CONTESTANT OBJECT
+  // ----------------------------------------------------------
 
   const contestant = {
 
@@ -1854,11 +2416,13 @@ async function registerContestant() {
 
     name,
 
-    category,
+    category: type,
 
     song,
 
-    draw: nextDraw
+    draw: nextDraw,
+
+    participants
 
   };
 
@@ -1866,14 +2430,48 @@ async function registerContestant() {
   try {
 
     await set(
-      ref(db, `event/contestants/${id}`),
+      ref(
+        db,
+        `event/contestants/${id}`
+      ),
       contestant
     );
 
 
     alert(
-      `${name} has been registered.\n\nDraw Number: ${nextDraw}`
+      `${name} has been registered successfully.\n\n` +
+      `Category: ${type}\n` +
+      `Draw Number: ${nextDraw}\n\n` +
+      `Song: ${song}`
     );
+
+
+    // Clear fields after registration
+
+    const ids = [
+      "singleName",
+      "duetName1",
+      "duetName2",
+      "teamName",
+      "teamMember1",
+      "teamMember2",
+      "teamMember3",
+      "teamMember4",
+      "teamMember5",
+      "newSong"
+    ];
+
+
+    ids.forEach(id => {
+
+      const element =
+        document.getElementById(id);
+
+      if (element) {
+        element.value = "";
+      }
+
+    });
 
 
   } catch (error) {
@@ -1920,14 +2518,31 @@ async function deleteContestant(id) {
   try {
 
     await remove(
-      ref(db, `event/contestants/${id}`)
+      ref(
+        db,
+        `event/contestants/${id}`
+      )
     );
 
 
     await remove(
-      ref(db, `event/scores/${id}`)
+      ref(
+        db,
+        `event/scores/${id}`
+      )
     );
 
+
+    if (D.active === id) {
+
+      await update(
+        ref(db, "event"),
+        {
+          active: null
+        }
+      );
+
+    }
 
   } catch (error) {
 
@@ -1956,10 +2571,14 @@ async function saveJudgeCount() {
 
 
   const count =
-    Number(select?.value || 3);
+    Number(
+      select?.value || 3
+    );
 
 
-  if (![3, 5].includes(count)) {
+  if (
+    ![3, 5].includes(count)
+  ) {
 
     alert(
       "Judge count must be 3 or 5."
@@ -2068,14 +2687,69 @@ async function resetCompetition() {
 
 
 // ============================================================
-// WIRE BUTTONS / EVENTS
+// REGISTRATION TYPE SWITCHING
+// ============================================================
+
+function updateRegistrationForm() {
+
+  const type =
+    document.getElementById(
+      "registrationType"
+    )?.value;
+
+
+  const single =
+    document.getElementById(
+      "singleRegistration"
+    );
+
+  const duet =
+    document.getElementById(
+      "duetRegistration"
+    );
+
+  const team =
+    document.getElementById(
+      "teamRegistration"
+    );
+
+
+  if (single) {
+    single.style.display =
+      type === "Male" ||
+      type === "Female"
+        ? "block"
+        : "none";
+  }
+
+
+  if (duet) {
+    duet.style.display =
+      type === "Duet"
+        ? "block"
+        : "none";
+  }
+
+
+  if (team) {
+    team.style.display =
+      type === "Team"
+        ? "block"
+        : "none";
+  }
+
+}
+
+
+// ============================================================
+// WIRE EVENTS
 // ============================================================
 
 function wire() {
 
 
   // ----------------------------------------------------------
-  // LOGIN SCREEN
+  // LOGIN
   // ----------------------------------------------------------
 
   if (!role) {
@@ -2136,7 +2810,8 @@ function wire() {
 
           draft = {};
 
-          draftPerformanceId = null;
+          draftPerformanceId =
+            null;
 
           render();
 
@@ -2157,8 +2832,6 @@ function wire() {
   if (role === "judge") {
 
 
-    // Score buttons
-
     document
       .querySelectorAll(".score-btn")
       .forEach(button => {
@@ -2174,7 +2847,8 @@ function wire() {
             );
 
 
-          draft[key] = value;
+          draft[key] =
+            value;
 
 
           document
@@ -2213,8 +2887,6 @@ function wire() {
       });
 
 
-    // Submit score
-
     const submit =
       document.getElementById(
         "submitScoreBtn"
@@ -2229,8 +2901,6 @@ function wire() {
     }
 
 
-    // Judge logout from score screen
-
     const logoutButton =
       document.getElementById(
         "jout"
@@ -2244,8 +2914,6 @@ function wire() {
 
     }
 
-
-    // Judge logout from waiting screen
 
     const waitingLogout =
       document.getElementById(
@@ -2267,11 +2935,8 @@ function wire() {
 
 
   // ----------------------------------------------------------
-  // AUDITOR
+  // AUDITOR NAVIGATION
   // ----------------------------------------------------------
-
-
-  // Navigation
 
   document
     .querySelectorAll("[data-page]")
@@ -2290,7 +2955,9 @@ function wire() {
     });
 
 
-  // Auditor logout
+  // ----------------------------------------------------------
+  // LOGOUT
+  // ----------------------------------------------------------
 
   const logoutButton =
     document.getElementById(
@@ -2306,7 +2973,9 @@ function wire() {
   }
 
 
-  // Activate performance
+  // ----------------------------------------------------------
+  // ACTIVATE
+  // ----------------------------------------------------------
 
   const activateButton =
     document.getElementById(
@@ -2334,7 +3003,9 @@ function wire() {
   }
 
 
-  // End active performance
+  // ----------------------------------------------------------
+  // END ACTIVE PERFORMANCE
+  // ----------------------------------------------------------
 
   const clearActive =
     document.getElementById(
@@ -2383,7 +3054,27 @@ function wire() {
   }
 
 
-  // Register contestant
+  // ----------------------------------------------------------
+  // REGISTRATION TYPE
+  // ----------------------------------------------------------
+
+  const registrationType =
+    document.getElementById(
+      "registrationType"
+    );
+
+
+  if (registrationType) {
+
+    registrationType.onchange =
+      updateRegistrationForm;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // REGISTER
+  // ----------------------------------------------------------
 
   const registerButton =
     document.getElementById(
@@ -2399,7 +3090,9 @@ function wire() {
   }
 
 
-  // Delete contestants
+  // ----------------------------------------------------------
+  // DELETE
+  // ----------------------------------------------------------
 
   document
     .querySelectorAll(
@@ -2418,7 +3111,9 @@ function wire() {
     });
 
 
-  // Save judge count
+  // ----------------------------------------------------------
+  // JUDGE COUNT
+  // ----------------------------------------------------------
 
   const saveJudgeButton =
     document.getElementById(
@@ -2434,7 +3129,9 @@ function wire() {
   }
 
 
-  // Reset competition
+  // ----------------------------------------------------------
+  // RESET
+  // ----------------------------------------------------------
 
   const resetButton =
     document.getElementById(
@@ -2576,15 +3273,20 @@ function render() {
             The Royal Karaoke judging system encountered an error while displaying the page.
           </p>
 
-          <pre
-            style="white-space:pre-wrap;">
-${escapeHTML(error.stack || error.message || String(error))}
+          <pre style="white-space:pre-wrap;">
+${escapeHTML(
+  error.stack ||
+  error.message ||
+  String(error)
+)}
           </pre>
 
           <button
             onclick="location.reload()"
             class="primary">
+
             RELOAD SYSTEM
+
           </button>
 
         </div>
@@ -2614,18 +3316,10 @@ async function ensureEvent() {
 
   if (!snapshot.exists()) {
 
-    const freshEvent =
-      defaultEvent();
-
-
-    // Start with an empty contestant list.
-    // This is a real competition system, not a demo database.
-
     await set(
       eventRef,
-      freshEvent
+      defaultEvent()
     );
-
 
     return;
 
@@ -2751,10 +3445,6 @@ async function start() {
 
   try {
 
-    // --------------------------------------------------------
-    // SIGN IN ANONYMOUSLY
-    // --------------------------------------------------------
-
     await signInAnonymously(
       auth
     );
@@ -2765,10 +3455,6 @@ async function start() {
     );
 
 
-    // --------------------------------------------------------
-    // MAKE SURE EVENT EXISTS
-    // --------------------------------------------------------
-
     await ensureEvent();
 
 
@@ -2776,10 +3462,6 @@ async function start() {
       "Firebase event data ready."
     );
 
-
-    // --------------------------------------------------------
-    // LISTEN FOR LIVE EVENT CHANGES
-    // --------------------------------------------------------
 
     onValue(
 
@@ -2827,7 +3509,11 @@ async function start() {
                 </p>
 
                 <pre style="white-space:pre-wrap;">
-${escapeHTML(error.stack || error.message || String(error))}
+${escapeHTML(
+  error.stack ||
+  error.message ||
+  String(error)
+)}
                 </pre>
 
               </div>
@@ -2865,13 +3551,18 @@ ${escapeHTML(error.stack || error.message || String(error))}
               </p>
 
               <pre style="white-space:pre-wrap;">
-${escapeHTML(error.message || String(error))}
+${escapeHTML(
+  error.message ||
+  String(error)
+)}
               </pre>
 
               <button
                 onclick="location.reload()"
                 class="primary">
+
                 TRY AGAIN
+
               </button>
 
             </div>
@@ -2914,13 +3605,19 @@ ${escapeHTML(error.message || String(error))}
           </p>
 
           <pre style="white-space:pre-wrap;">
-${escapeHTML(error.stack || error.message || String(error))}
+${escapeHTML(
+  error.stack ||
+  error.message ||
+  String(error)
+)}
           </pre>
 
           <button
             onclick="location.reload()"
             class="primary">
+
             TRY AGAIN
+
           </button>
 
         </div>
@@ -2944,7 +3641,8 @@ window.addEventListener(
 
     console.error(
       "Global JavaScript error:",
-      event.error || event.message
+      event.error ||
+      event.message
     );
 
   }
@@ -2965,7 +3663,7 @@ window.addEventListener(
 
 
 // ============================================================
-// EXPOSE IMPORTANT FUNCTIONS
+// EXPOSE FUNCTIONS
 // ============================================================
 
 Object.assign(
