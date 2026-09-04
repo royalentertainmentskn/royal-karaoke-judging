@@ -5841,4 +5841,369 @@ function wire() {
 
     .getElementById(
 
-      "competitionTeam"
+      "competitionTeam"    )
+      ?.addEventListener(
+        "click",
+        () =>
+          changeCompetitionType(
+            COMPETITION_TYPES.TEAM
+          )
+      );
+
+  document
+    .getElementById(
+      "competitionIndividual"
+    )
+    ?.addEventListener(
+      "click",
+      () =>
+        changeCompetitionType(
+          COMPETITION_TYPES.INDIVIDUAL
+        )
+    );
+
+  /* =======================================================
+      JUDGE COUNT
+     ======================================================= */
+
+  document
+    .getElementById("judges3")
+    ?.addEventListener(
+      "click",
+      () =>
+        changeJudgeCount(3)
+    );
+
+  document
+    .getElementById("judges5")
+    ?.addEventListener(
+      "click",
+      () =>
+        changeJudgeCount(5)
+    );
+
+  /* =======================================================
+      RESET
+     ======================================================= */
+
+  document
+    .getElementById(
+      "resetCompetition"
+    )
+    ?.addEventListener(
+      "click",
+      resetCompetition
+    );
+
+  /* =======================================================
+      ACTIVATE
+     ======================================================= */
+
+  document
+    .getElementById("activate")
+    ?.addEventListener(
+      "click",
+      async () => {
+        const select =
+          document.getElementById(
+            "act"
+          );
+        const id =
+          select?.value;
+        if (!id) {
+          alert(
+            "Select a performance first."
+          );
+          return;
+        }
+        const contestant =
+          D.contestants?.[id];
+        if (!contestant) {
+          alert(
+            "That performance does not exist."
+          );
+          return;
+        }
+        if (
+          !hasDrawNumber(
+            contestant
+          )
+        ) {
+          alert(
+            "This performance has not been assigned a draw number yet.\n\n" +
+            "Enter the number drawn on the Registration & Draw page first."
+          );
+          return;
+        }
+        const existing =
+          Object.keys(
+            S()[id] || {}
+          ).filter(
+            judgeId =>
+              activeJudges().some(
+                judge =>
+                  judge.id ===
+                  judgeId
+              )
+          ).length;
+        if (
+          existing > 0 &&
+          id !== D.active
+        ) {
+          const proceed =
+            confirm(
+              `This performance already has ${existing} judge score(s).\n\n` +
+              "Activate it anyway?"
+            );
+          if (!proceed) {
+            return;
+          }
+        }
+        try {
+          await update(
+            ref(db, "event"),
+            {
+              active: id
+            }
+          );
+          draft = {};
+          draftPerformanceId =
+            id;
+        } catch (error) {
+          alert(
+            "Could not activate performance.\n\n" +
+            error.message
+          );
+        }
+      }
+    );
+
+  /* =======================================================
+      ADD TEAM
+     ======================================================= */
+
+  document
+    .getElementById(
+      "addTeamRoster"
+    )
+    ?.addEventListener(
+      "click",
+      addTeamRoster
+    );
+
+  /* =======================================================
+      ADD DUET
+     ======================================================= */
+
+  document
+    .getElementById(
+      "addDuet"
+    )
+    ?.addEventListener(
+      "click",
+      addDuet
+    );
+
+  /* =======================================================
+      DUET TEAM SELECTION
+     ======================================================= */
+
+  const duetTeam =
+    document.getElementById(
+      "duetTeam"
+    );
+  if (duetTeam) {
+    duetTeam.addEventListener(
+      "change",
+      () => {
+        const member1 =
+          document.getElementById(
+            "duetMember1"
+          );
+        const member2 =
+          document.getElementById(
+            "duetMember2"
+          );
+        if (!member1 || !member2) {
+          return;
+        }
+        member1.innerHTML =
+          memberOptions(
+            duetTeam.value
+          );
+        member2.innerHTML =
+          memberOptions(
+            duetTeam.value
+          );
+      }
+    );
+  }
+
+  /* =======================================================
+      DUET MEMBER 1
+     ======================================================= */
+
+  document
+    .getElementById(
+      "duetMember1"
+    )
+    ?.addEventListener(
+      "change",
+      () => {
+        const member1 =
+          document.getElementById(
+            "duetMember1"
+          );
+        const member2 =
+          document.getElementById(
+            "duetMember2"
+          );
+        if (!member1 || !member2) {
+          return;
+        }
+        const selected =
+          member1.value;
+        [
+          ...member2.options
+        ].forEach(
+          option => {
+            option.disabled =
+              option.value &&
+              option.value ===
+              selected;
+          }
+        );
+        if (
+          member2.value ===
+          selected
+        ) {
+          member2.value =
+            "";
+        }
+      }
+    );
+
+  /* =======================================================
+      ADD INDIVIDUAL
+     ======================================================= */
+
+  document
+    .getElementById(
+      "addIndividual"
+    )
+    ?.addEventListener(
+      "click",
+      addIndividual
+    );
+
+  /* =======================================================
+      SAVE DRAW NUMBERS
+     ======================================================= */
+
+  document
+    .getElementById(
+      "saveDrawNumbers"
+    )
+    ?.addEventListener(
+      "click",
+      saveDrawNumbers
+    );
+
+  /* =======================================================
+      DELETE PERFORMANCES
+     ======================================================= */
+
+  document
+    .querySelectorAll(".del")
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () =>
+          deletePerformance(
+            button.dataset.id
+          )
+      );
+    });
+
+  /* =======================================================
+      DELETE TEAMS
+     ======================================================= */
+
+  document
+    .querySelectorAll(
+      ".delete-team"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () =>
+          deleteTeam(
+            button.dataset.id
+          )
+      );
+    });
+}
+/* =========================================================
+    RENDER
+   ========================================================= */
+
+function render() {
+  if (
+    !D ||
+    !D.name
+  ) {
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="card hero">
+          <div class="big">
+            🎤
+          </div>
+          <h2>
+            Loading Royal Karaoke SKN...
+          </h2>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  /* LOGIN */
+  if (!role) {
+    root.innerHTML =
+      login();
+  }
+
+  /* JUDGE */
+  else if (
+    role === "judge"
+  ) {
+    root.innerHTML =
+      head() +
+      judge();
+  }
+
+  /* AUDITOR */
+  else {
+    const body =
+      page === "contestants"
+        ? cont()
+        : page === "live"
+        ? live()
+        : page === "results"
+        ? results()
+        : dash();
+    root.innerHTML =
+      head() +
+      `<div class="wrap">
+        ${nav()}
+        ${body}
+      </div>`;
+  }
+
+  wire();
+}
+/* =========================================================
+    START APPLICATION
+   ========================================================= */
+
+start();
