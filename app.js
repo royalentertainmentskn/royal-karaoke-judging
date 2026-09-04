@@ -5841,7 +5841,8 @@ function wire() {
 
     .getElementById(
 
-      "competitionTeam"    )
+      "competitionTeam"
+    )
       ?.addEventListener(
         "click",
         () =>
