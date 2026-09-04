@@ -75,6 +75,10 @@ let selectedJudge = null;
 let correctionDraft = {};
 let draft = {};
 
+/* -------------------------------------------------------
+   HELPERS
+------------------------------------------------------- */
+
 const E = v =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -95,17 +99,70 @@ const cs = () =>
 
 const S = () => D.scores || {};
 
-const A = () => D.contestants?.[D.active];
+const A = () =>
+  D.contestants?.[D.active];
 
 const T = () =>
-  C.reduce((n, [k]) => n + (+draft[k] || 0), 0);
+  C.reduce(
+    (n, [k]) => n + (+draft[k] || 0),
+    0
+  );
 
 function correctionTotal() {
   return C.reduce(
-    (n, [k]) => n + Number(correctionDraft[k] || 0),
+    (n, [k]) =>
+      n + Number(correctionDraft[k] || 0),
     0
   );
 }
+
+/*
+  Current judging panel.
+
+  Defaults to 5 so existing events continue
+  working exactly as before.
+*/
+function panelSize() {
+  return Number(D.panelSize || 5) === 3
+    ? 3
+    : 5;
+}
+
+/*
+  Returns only judges belonging to the
+  currently selected panel.
+*/
+function activeJudgeEntries() {
+  return Object.entries(J).filter(
+    ([id, j]) => j.no <= panelSize()
+  );
+}
+
+/*
+  Returns true if the panel has been locked.
+*/
+function panelLocked() {
+  return D.panelLocked === true;
+}
+
+/*
+  Number of submitted judges for the
+  current contestant, counting only
+  judges in the active panel.
+*/
+function submittedCount() {
+  const s = D.active
+    ? S()[D.active] || {}
+    : {};
+
+  return activeJudgeEntries().filter(
+    ([id]) => s[id]
+  ).length;
+}
+
+/* -------------------------------------------------------
+   START
+------------------------------------------------------- */
 
 async function start() {
   try {
@@ -132,13 +189,17 @@ async function start() {
         !(await get(ref(db, "event"))).exists()
       ) {
         await set(ref(db, "event"), {
-          name: "Royal Karaoke SKN Championship — Test Event",
+          name:
+            "Royal Karaoke SKN Championship — Test Event",
           venue: "Test Venue",
           active: "c1",
           contestants: DEMO,
           judges: J,
-          scores: {}
+          scores: {},
+          panelSize: 5,
+          panelLocked: false
         });
+
         return;
       }
 
@@ -157,15 +218,21 @@ async function start() {
   );
 }
 
+/* -------------------------------------------------------
+   HEADER
+------------------------------------------------------- */
+
 function head() {
   return `
     <div class="top">
+
       <b>
         🎤 ROYAL KARAOKE SKN<br>
         <small>DIGITAL JUDGING SYSTEM</small>
       </b>
 
       <span class="pill">
+
         ${
           role === "auditor"
             ? "AUDITOR"
@@ -173,21 +240,30 @@ function head() {
             ? `JUDGE ${J[jid]?.no || "?"}`
             : "WELCOME"
         }
+
       </span>
+
     </div>
   `;
 }
 
+/* -------------------------------------------------------
+   LOGIN
+------------------------------------------------------- */
+
 function login() {
   return `
     <div class="wrap">
+
       <div class="card hero">
 
         <div class="big">🎤</div>
 
         <h1>Royal Karaoke SKN</h1>
 
-        <h2>100-Point Digital Judging System</h2>
+        <h2>
+          100-Point Digital Judging System
+        </h2>
 
         <button id="aud" class="primary">
           AUDITOR
@@ -197,10 +273,13 @@ function login() {
 
         <div class="login-grid">
 
-          ${Object.entries(J)
+          ${activeJudgeEntries()
             .map(
               ([id, j]) => `
-                <button class="jl" data-id="${id}">
+                <button
+                  class="jl"
+                  data-id="${id}"
+                >
                   ${j.name}
                 </button>
               `
@@ -209,24 +288,118 @@ function login() {
 
         </div>
 
+        <p class="muted">
+          Current panel:
+          <b>${panelSize()} Judges</b>
+        </p>
+
       </div>
+
     </div>
   `;
 }
 
+/* -------------------------------------------------------
+   AUDITOR DASHBOARD
+------------------------------------------------------- */
+
 function dash() {
   const a = A();
-  const s = S()[D.active] || {};
+
+  const s =
+    D.active
+      ? S()[D.active] || {}
+      : {};
 
   return `
     <h1>Auditor Dashboard</h1>
 
+    <!-- PANEL CONTROL -->
+
+    <div class="card">
+
+      <h2>Judging Panel</h2>
+
+      <p class="muted">
+        Select whether this competition will use
+        3 judges or 5 judges.
+      </p>
+
+      <select
+        id="panel-size"
+        ${panelLocked() ? "disabled" : ""}
+      >
+
+        <option
+          value="3"
+          ${panelSize() === 3 ? "selected" : ""}
+        >
+          3 Judges
+        </option>
+
+        <option
+          value="5"
+          ${panelSize() === 5 ? "selected" : ""}
+        >
+          5 Judges
+        </option>
+
+      </select>
+
+      <br><br>
+
+      ${
+        panelLocked()
+          ? `
+            <div class="notice">
+
+              <b>
+                🔒 PANEL LOCKED
+              </b>
+
+              <br>
+
+              This competition is using
+              <b>${panelSize()} judges</b>.
+              The panel cannot be changed
+              after the first performance
+              has been activated.
+
+            </div>
+          `
+          : `
+            <button
+              id="save-panel"
+              class="primary"
+            >
+              SAVE JUDGING PANEL
+            </button>
+
+            <p class="muted">
+              The panel will lock when the
+              first performance is activated.
+            </p>
+          `
+      }
+
+    </div>
+
     <div class="grid">
 
       <div class="card">
-        <span class="muted">Competition</span>
-        <h2>${E(D.name)}</h2>
-        <p>${E(D.venue || "")}</p>
+
+        <span class="muted">
+          Competition
+        </span>
+
+        <h2>
+          ${E(D.name)}
+        </h2>
+
+        <p>
+          ${E(D.venue || "")}
+        </p>
+
       </div>
 
       <div class="card">
@@ -264,12 +437,21 @@ function dash() {
         </span>
 
         <div class="stat">
-          ${Object.keys(s).length}/5
+
+          ${submittedCount()}/${panelSize()}
+
         </div>
+
+        <p class="muted">
+          Active panel:
+          ${panelSize()} judges
+        </p>
 
       </div>
 
     </div>
+
+    <!-- ACTIVATE PERFORMANCE -->
 
     <div class="card">
 
@@ -282,7 +464,9 @@ function dash() {
             x => `
               <option
                 value="${x.id}"
-                ${x.id === D.active ? "selected" : ""}
+                ${x.id === D.active
+                  ? "selected"
+                  : ""}
               >
                 #${x.number} —
                 ${E(x.name)}
@@ -296,25 +480,47 @@ function dash() {
 
       <br><br>
 
-      <button id="activate" class="primary">
+      <button
+        id="activate"
+        class="primary"
+      >
         ACTIVATE CONTESTANT
       </button>
 
+      ${
+        !panelLocked()
+          ? `
+            <p class="warn">
+              Activating the first performance
+              will lock the judging panel at
+              ${panelSize()} judges.
+            </p>
+          `
+          : ""
+      }
+
     </div>
+
+    <!-- JUDGE SCORES -->
 
     <div class="card">
 
-      <h2>Judge Scores & Corrections</h2>
+      <h2>
+        Judge Scores & Corrections
+      </h2>
 
       <p class="muted">
-        Select a submitted judge score to view and,
-        if necessary, correct the score before moving
-        to the next contestant.
+
+        Select a submitted judge score to
+        view and, if necessary, correct the
+        score before moving to the next
+        contestant.
+
       </p>
 
       <div class="login-grid">
 
-        ${Object.entries(J)
+        ${activeJudgeEntries()
           .map(
             ([id, j]) => `
               <button
@@ -350,15 +556,21 @@ function dash() {
 
     </div>
 
+    <!-- JUDGE STATUS -->
+
     <div class="card">
 
       <h2>Judge Status</h2>
 
-      ${Object.entries(J)
+      ${activeJudgeEntries()
         .map(
           ([id, j]) => `
             <p>
-              <b>${j.name}</b> —
+
+              <b>
+                ${j.name}
+              </b>
+              —
 
               ${
                 s[id]
@@ -383,6 +595,10 @@ function dash() {
   `;
 }
 
+/* -------------------------------------------------------
+   JUDGE SCORE CORRECTION
+------------------------------------------------------- */
+
 function judgeScores() {
   const a = A();
 
@@ -405,7 +621,8 @@ function judgeScores() {
         <h1>No Active Contestant</h1>
 
         <p>
-          There is currently no active contestant.
+          There is currently no active
+          contestant.
         </p>
 
       </div>
@@ -424,15 +641,20 @@ function judgeScores() {
         </button>
 
         <h1>
-          ${E(J[selectedJudge]?.name || "Judge")}
+          ${E(
+            J[selectedJudge]?.name ||
+            "Judge"
+          )}
         </h1>
 
         <h2>
-          #${a.number} — ${E(a.name)}
+          #${a.number} —
+          ${E(a.name)}
         </h2>
 
         <p class="warn">
-          This judge has not submitted a score yet.
+          This judge has not submitted
+          a score yet.
         </p>
 
       </div>
@@ -461,11 +683,15 @@ function judgeScores() {
       </button>
 
       <h1>
-        ${E(J[selectedJudge]?.name || "Judge")}
+        ${E(
+          J[selectedJudge]?.name ||
+          "Judge"
+        )}
       </h1>
 
       <h2>
-        #${a.number} — ${E(a.name)}
+        #${a.number} —
+        ${E(a.name)}
       </h2>
 
       <p>
@@ -486,6 +712,27 @@ function judgeScores() {
         }
 
       </p>
+
+      ${
+        score.correctedAt
+          ? `
+            <div class="notice">
+
+              <b>
+                ✓ Previously Corrected
+              </b>
+
+              <br>
+
+              Last correction:
+              ${new Date(
+                score.correctedAt
+              ).toLocaleString()}
+
+            </div>
+          `
+          : ""
+      }
 
     </div>
 
@@ -515,11 +762,14 @@ function judgeScores() {
               </b>
 
               <span>
+
                 <span id="corr-${k}">
                   ${correctionDraft[k] || 0}
                 </span>
+
                 /
                 ${max}
+
               </span>
 
             </div>
@@ -530,14 +780,16 @@ function judgeScores() {
                 { length: max + 1 },
                 (_, n) => `
                   <button
-                    class="corr-score-btn
-                    ${
-                      Number(
-                        correctionDraft[k]
-                      ) === n
-                        ? "selected"
-                        : ""
-                    }"
+                    class="
+                      corr-score-btn
+                      ${
+                        Number(
+                          correctionDraft[k]
+                        ) === n
+                          ? "selected"
+                          : ""
+                      }
+                    "
                     data-k="${k}"
                     data-n="${n}"
                   >
@@ -555,9 +807,11 @@ function judgeScores() {
       <div class="total">
 
         TOTAL:
+
         <span id="correction-total">
           ${correctionTotal()}
         </span>
+
         / 100
 
       </div>
@@ -573,6 +827,10 @@ function judgeScores() {
     </div>
   `;
 }
+
+/* -------------------------------------------------------
+   CONTESTANTS
+------------------------------------------------------- */
 
 function cont() {
   return `
@@ -679,8 +937,16 @@ function cont() {
   `;
 }
 
+/* -------------------------------------------------------
+   LIVE SCORES
+------------------------------------------------------- */
+
 function live() {
-  const s = S()[D.active] || {};
+  const s =
+    D.active
+      ? S()[D.active] || {}
+      : {};
+
   const a = A();
 
   return `
@@ -702,11 +968,16 @@ function live() {
 
       </h2>
 
+      <p class="muted">
+        Judging panel:
+        <b>${panelSize()} judges</b>
+      </p>
+
     </div>
 
     <div class="grid">
 
-      ${Object.entries(J)
+      ${activeJudgeEntries()
         .map(
           ([id, j]) => `
             <div class="card">
@@ -742,22 +1013,42 @@ function live() {
   `;
 }
 
+/* -------------------------------------------------------
+   RESULTS
+------------------------------------------------------- */
+
 function results() {
+
   const r = cs()
     .map(x => {
 
-      const scores =
-        Object.values(
-          S()[x.id] || {}
-        );
+      /*
+        IMPORTANT:
+        Only judges belonging to the
+        selected panel are included.
+      */
 
-      const avg = scores.length
-        ? scores.reduce(
-            (n, q) =>
-              n + Number(q.total || 0),
-            0
-          ) / scores.length
-        : 0;
+      const allScores =
+        S()[x.id] || {};
+
+      const scores =
+        activeJudgeEntries()
+          .map(([id]) =>
+            allScores[id]
+          )
+          .filter(Boolean);
+
+      const avg =
+        scores.length
+          ? scores.reduce(
+              (n, q) =>
+                n +
+                Number(
+                  q.total || 0
+                ),
+              0
+            ) / scores.length
+          : 0;
 
       return {
         ...x,
@@ -802,6 +1093,15 @@ function results() {
 
   return `
     <h1>Results</h1>
+
+    <div class="card">
+
+      <h3>
+        Results based on
+        ${panelSize()}-Judge Panel
+      </h3>
+
+    </div>
 
     <div class="grid">
 
@@ -900,7 +1200,51 @@ function results() {
   `;
 }
 
+/* -------------------------------------------------------
+   JUDGE SIDE
+------------------------------------------------------- */
+
 function judge() {
+
+  /*
+    If a judge outside the active panel
+    is somehow already logged in, don't
+    allow them to score.
+  */
+
+  if (
+    !J[jid] ||
+    J[jid].no > panelSize()
+  ) {
+    return `
+      <div class="wrap">
+
+        <div class="card hero">
+
+          <h1>
+            Judge Not In Active Panel
+          </h1>
+
+          <p>
+            This competition is using
+            a ${panelSize()}-judge panel.
+          </p>
+
+          <p class="muted">
+            ${J[jid]?.name || "This judge"}
+            is not part of the active panel.
+          </p>
+
+          <button id="jout">
+            Log out
+          </button>
+
+        </div>
+
+      </div>
+    `;
+  }
+
   const a = A();
 
   if (!a) {
@@ -1023,12 +1367,14 @@ function judge() {
                   { length: max + 1 },
                   (_, n) => `
                     <button
-                      class="sb
-                      ${
-                        draft[k] === n
-                          ? "selected"
-                          : ""
-                      }"
+                      class="
+                        sb
+                        ${
+                          draft[k] === n
+                            ? "selected"
+                            : ""
+                        }
+                      "
                       data-k="${k}"
                       data-n="${n}"
                     >
@@ -1065,6 +1411,10 @@ function judge() {
   `;
 }
 
+/* -------------------------------------------------------
+   NAVIGATION
+------------------------------------------------------- */
+
 function nav() {
   return `
     <div class="nav">
@@ -1078,12 +1428,14 @@ function nav() {
         .map(
           ([p, label]) => `
             <button
-              class="nb
-              ${
-                page === p
-                  ? "primary"
-                  : ""
-              }"
+              class="
+                nb
+                ${
+                  page === p
+                    ? "primary"
+                    : ""
+                }
+              "
               data-p="${p}"
             >
               ${label}
@@ -1100,25 +1452,45 @@ function nav() {
   `;
 }
 
+/* -------------------------------------------------------
+   LOGOUT
+------------------------------------------------------- */
+
 function logout() {
+
   role = null;
   jid = null;
   selectedJudge = null;
   correctionDraft = {};
   draft = {};
 
-  localStorage.removeItem("rk_role");
-  localStorage.removeItem("rk_judge");
+  localStorage.removeItem(
+    "rk_role"
+  );
+
+  localStorage.removeItem(
+    "rk_judge"
+  );
 
   render();
 }
 
+/* -------------------------------------------------------
+   RETURN TO AUDITOR
+------------------------------------------------------- */
+
 function returnToAuditor() {
+
   selectedJudge = null;
   correctionDraft = {};
   page = "home";
+
   render();
 }
+
+/* -------------------------------------------------------
+   WIRING
+------------------------------------------------------- */
 
 function wire() {
 
@@ -1141,6 +1513,7 @@ function wire() {
             role;
 
           render();
+
         }
       );
 
@@ -1153,6 +1526,7 @@ function wire() {
           () => {
 
             role = "judge";
+
             jid =
               button.dataset.id;
 
@@ -1165,6 +1539,7 @@ function wire() {
               jid;
 
             render();
+
           }
         );
 
@@ -1195,6 +1570,7 @@ function wire() {
               );
 
             render();
+
           }
         );
 
@@ -1459,7 +1835,76 @@ function wire() {
     );
 
   /*
+    PANEL SIZE
+  */
+
+  document
+    .getElementById("save-panel")
+    ?.addEventListener(
+      "click",
+      async () => {
+
+        if (panelLocked()) {
+          alert(
+            "The judging panel is already locked."
+          );
+          return;
+        }
+
+        const selected =
+          Number(
+            document.getElementById(
+              "panel-size"
+            )?.value
+          );
+
+        if (
+          selected !== 3 &&
+          selected !== 5
+        ) {
+          alert(
+            "Please select either 3 or 5 judges."
+          );
+          return;
+        }
+
+        if (
+          !confirm(
+            `Set this competition to a ${selected}-judge panel?`
+          )
+        ) {
+          return;
+        }
+
+        try {
+
+          await update(
+            ref(db, "event"),
+            {
+              panelSize: selected,
+              panelLocked: false
+            }
+          );
+
+          alert(
+            `Judging panel set to ${selected} judges.`
+          );
+
+        } catch (e) {
+
+          alert(
+            `Unable to save judging panel: ${e.message}`
+          );
+
+        }
+
+      }
+    );
+
+  /*
     ACTIVATE CONTESTANT
+
+    The first activation locks the panel.
   */
 
   document
@@ -1479,11 +1924,21 @@ function wire() {
 
         try {
 
+          const changes = {
+            active
+          };
+
+          /*
+            Lock panel when the first
+            performance is activated.
+          */
+          if (!panelLocked()) {
+            changes.panelLocked = true;
+          }
+
           await update(
             ref(db, "event"),
-            {
-              active
-            }
+            changes
           );
 
           page = "home";
@@ -1653,6 +2108,10 @@ function wire() {
 
     });
 }
+
+/* -------------------------------------------------------
+   RENDER
+------------------------------------------------------- */
 
 function render() {
 
