@@ -3609,7 +3609,7 @@ function wire() {
               );
               return;
             }
-            judgeFromAuditor = true;
+            judgeFromAuditor = false;
 role =
               "judge";
             jid =
