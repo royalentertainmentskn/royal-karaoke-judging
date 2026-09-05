@@ -2792,7 +2792,7 @@ async function resetCompetition() {
 /* =========================================================
    ADD TEAM WITH FIVE MEMBERS
    ========================================================= */
-async async function addTeamRoster() {
+async function addTeamRoster() {
   const teamId = document.getElementById("teamId")?.value.trim();
   const teamNameValue = document.getElementById("teamName")?.value.trim();
   const duetMember1Number = Number(document.getElementById("duetMember1")?.value);
