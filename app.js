@@ -53,6 +53,8 @@ let draft = {};
 let submitting = false;
 let draftPerformanceId = null;
 let judgeFromAuditor = false;
+let correctionJudgeId = null;
+let correctionPerformanceId = null;
 const E = value =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -883,40 +885,15 @@ function dash() {
     </div>
     <div class="card">
       <h2>
-        Judge Status
-      </h2>
-      ${activeJudges()
-        .map(judge => {
-          const score =
-            activeScores[judge.id];
-          return `
-            <p>
-              <b>
-                ${E(judge.name)}
-              </b>
-              —
-              ${
-                score
-                  ? `
-                    <span class="ok">
-                      ✓ Submitted —
-                      ${Number(
-                        score.total || 0
-                      ).toFixed(0)}/100
-                    </span>
-                  `
-                  : `
-                    <span class="warn">
-                      Waiting
-                    </span>
-                  `
-              }
-            </p>
-          `;
-        })
-        .join("")}
-    </div>
-    ${resetCard()}
+        Judge Status
+      </h2>
+      ${activeJudges().map(judge => {
+        const score=activeScores[judge.id];
+        return `<div style="margin-bottom:12px"><button class="auditor-judge-score" data-judge-id="${E(judge.id)}" type="button" style="width:100%;text-align:left"><b>${E(judge.name)}</b> — ${score ? `<span class="ok">✓ Submitted — ${Number(score.total||0).toFixed(0)}/100</span><br><small>CLICK TO VIEW / CORRECT THIS JUDGE'S SCORE</small>` : `<span class="warn">Waiting — no score submitted yet</span>`}</button></div>`;
+      }).join("")}
+    </div>
+  </div>
+${resetCard()}
   `;
 }
 /* =========================================================
@@ -2324,6 +2301,28 @@ function judgeReturnButton() {
     </button>
   `;
 }
+function auditorJudgeCorrection() {
+  const performanceId = correctionPerformanceId || D.active;
+  const judgeId = correctionJudgeId;
+  const performance = performanceId ? D.contestants?.[performanceId] : null;
+  const judge = judgeId ? J[judgeId] : null;
+  const score = performanceId && judgeId ? S()[performanceId]?.[judgeId] : null;
+  if (!performance || !judge || !score) return `<div class="wrap"><div class="card hero"><h1>Judge Score Correction</h1><p class="warn">There is no submitted score available for this judge on the current performance.</p><button id="returnAuditorCorrection" type="button" class="primary" style="width:100%">← RETURN TO AUDITOR</button></div></div>`;
+  return `<div class="wrap"><div class="card hero"><span class="pill">AUDITOR — SCORE CORRECTION</span><div class="big">#${E(performance.number)}</div><h1>${E(performance.name)}${performance.category === "Duet" && performance.name2 ? `<br>& ${E(performance.name2)}` : ""}</h1><h2>${E(judge.name)}</h2><p>${E(performance.category || "")}${performance.song ? ` · ${E(performance.song)}` : ""}</p><p class="warn">Review and correct this judge's submitted score before the next performance is activated.</p></div><div class="card">${C.map(([key,label,max]) => `<div class="score-block"><div class="score-title"><b>${E(label)}</b><span id="correction-display-${E(key)}">${Number(score[key] ?? 0)}/${max}</span></div><div class="score-buttons">${Array.from({length:max+1},(_,n)=>`<button class="correction-score-button ${Number(score[key])===n?"selected":""}" data-k="${E(key)}" data-n="${n}" type="button">${n}</button>`).join("")}</div></div>`).join("")}<div class="total" id="correction-total">TOTAL: ${Number(score.total||0)}/${MAX_TOTAL}</div><button id="saveJudgeCorrection" class="primary" style="width:100%" type="button">SAVE CORRECTED SCORE</button><button id="returnAuditorCorrection2" type="button" style="width:100%;margin-top:10px">← RETURN TO AUDITOR</button></div></div>`;
+}
+function returnToAuditorFromCorrection() { correctionJudgeId=null; correctionPerformanceId=null; page="home"; render(); }
+async function saveJudgeCorrection() {
+  const performanceId=correctionPerformanceId||D.active, judgeId=correctionJudgeId;
+  if (!performanceId || !judgeId || !J[judgeId]) { alert("The judge correction could not be identified."); return; }
+  if (D.active!==performanceId) { alert("The active performance has changed. No correction was saved."); return; }
+  const current=S()[performanceId]?.[judgeId];
+  if (!current) { alert("That judge has no submitted score for this performance."); return; }
+  const corrected={...current};
+  for (const [key,label] of C) { const selected=document.querySelector(`.correction-score-button[data-k="${key}"].selected`); if (!selected) { alert(`Please select a score for ${label}.`); return; } corrected[key]=Number(selected.dataset.n); }
+  corrected.total=C.reduce((sum,[key])=>sum+Number(corrected[key]||0),0); corrected.corrected=true; corrected.correctedAt=Date.now(); corrected.correctedBy="Auditor";
+  try { await set(ref(db,`event/scores/${performanceId}/${judgeId}`),corrected); alert(`${J[judgeId].name}'s corrected score has been saved: ${corrected.total}/${MAX_TOTAL}.`); returnToAuditorFromCorrection(); } catch(error) { console.error("Judge score correction error:",error); alert("The corrected score could not be saved.\n\n"+error.message); }
+}
+
 function judge() {
   const a =
     A();
@@ -4187,4 +4186,9 @@ function render() {
 /* =========================================================
    START APPLICATION
    ========================================================= */
-start();
+start();  document.querySelectorAll(".auditor-judge-score").forEach(button=>{ button.addEventListener("click",()=>{ const selectedJudge=button.dataset.judgeId; if(!D.active){alert("There is no active performance. Activate a performance first.");return;} if(!S()[D.active]?.[selectedJudge]){alert(`${J[selectedJudge]?.name||"This judge"} has not submitted a score for the current performance yet.`);return;} correctionJudgeId=selectedJudge; correctionPerformanceId=D.active; page="judgeCorrection"; render(); }); });
+  document.getElementById("saveJudgeCorrection")?.addEventListener("click",saveJudgeCorrection);
+  document.getElementById("returnAuditorCorrection")?.addEventListener("click",returnToAuditorFromCorrection);
+  document.getElementById("returnAuditorCorrection2")?.addEventListener("click",returnToAuditorFromCorrection);
+  document.querySelectorAll(".correction-score-button").forEach(button=>{ button.addEventListener("click",()=>{ const key=button.dataset.k; document.querySelectorAll(`.correction-score-button[data-k="${key}"]`).forEach(b=>b.classList.remove("selected")); button.classList.add("selected"); const max=C.find(x=>x[0]===key)?.[2]||0; const display=document.getElementById(`correction-display-${key}`); if(display) display.textContent=`${Number(button.dataset.n)}/${max}`; let total=0; for(const [k] of C){const selected=document.querySelector(`.correction-score-button[data-k="${k}"].selected`); total+=Number(selected?.dataset.n||0);} const totalEl=document.getElementById("correction-total"); if(totalEl) totalEl.textContent=`TOTAL: ${total}/${MAX_TOTAL}`; }); });
+
