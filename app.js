@@ -2860,7 +2860,35 @@ function results() {
     <h1>
       Competition Results
     </h1>
+    return `
+    <h1>
+      Competition Results
+    </h1>
+
     <div class="card">
+      <div class="login-grid">
+        <button
+          id="printResults"
+          class="primary"
+          type="button"
+        >
+          🖨️ PRINT RESULTS
+        </button>
+
+        <button
+          id="exportResults"
+          type="button"
+        >
+          💾 SAVE / EXPORT RESULTS
+        </button>
+      </div>
+
+      <p class="muted">
+        Print a formal results report or save the
+        complete results as a CSV file for Excel.
+      </p>
+    </div>
+          <div class="card">
       <h2>
         ${E(
           competitionTypeLabel()
