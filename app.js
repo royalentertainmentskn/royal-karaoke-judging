@@ -1,58 +1,53 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import {
-  getDatabase,
-  ref,
-  set,
-  update,
-  onValue,
-  get,
-  remove,
-  push,
-  runTransaction
+  getDatabase,
+  ref,
+  set,
+  update,
+  onValue,
+  get,
+  remove,
+  push,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 import {
-  getAuth,
-  signInAnonymously
+  getAuth,
+  signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 const C = [
-  ["voiceManagement", "Voice Management", 10],
-  ["voiceTiming", "Voice Timing", 20],
-  ["costume", "Costume", 5],
-  ["props", "Props", 5],
-  ["performance", "Performance", 40],
-  ["crowdResponse", "Crowd Response", 20]
+  ["voiceManagement", "Voice Management", 10],
+  ["voiceTiming", "Voice Timing", 20],
+  ["costume", "Costume", 5],
+  ["props", "Props", 5],
+  ["performance", "Performance", 40],
+  ["crowdResponse", "Crowd Response", 20]
 ];
 const MAX_TOTAL = C.reduce(
-  (total, item) => total + item[2],
-  0
+  (total, item) => total + item[2],
+  0
 );
 const J = {
-  j1: { no: 1, name: "Judge 1" },
-  j2: { no: 2, name: "Judge 2" },
-  j3: { no: 3, name: "Judge 3" },
-  j4: { no: 4, name: "Judge 4" },
-  j5: { no: 5, name: "Judge 5" }
+  j1: { no: 1, name: "Judge 1" },
+  j2: { no: 2, name: "Judge 2" },
+  j3: { no: 3, name: "Judge 3" },
+  j4: { no: 4, name: "Judge 4" },
+  j5: { no: 5, name: "Judge 5" }
 };
 const VALID_JUDGE_COUNTS = [3, 5];
 const COMPETITION_TYPES = {
-  TEAM: "team",
-  INDIVIDUAL: "individual"
+  TEAM: "team",
+  INDIVIDUAL: "individual"
 };
 const fb = initializeApp(firebaseConfig);
 const db = getDatabase(fb);
 const au = getAuth(fb);
 const root = document.getElementById("app");
-const isJudgePortal = () =>
-  new URLSearchParams(window.location.search).get("judge") === "1" ||
-  window.location.hash === "#judge";
 let D = {};
 let role =
-  localStorage.getItem("rk_role") || null;
-if (isJudgePortal() && role !== "judge") role = null;
-if (!isJudgePortal() && role === "judge") role = null;
+  localStorage.getItem("rk_role") || null;
 let jid =
-  localStorage.getItem("rk_judge") || null;
+  localStorage.getItem("rk_judge") || null;
 let page = "home";
 let draft = {};
 let submitting = false;
@@ -61,854 +56,835 @@ let judgeFromAuditor = false;
 let correctionJudgeId = null;
 let correctionPerformanceId = null;
 const E = value =>
-  String(value ?? "").replace(
-    /[&<>"']/g,
-    c =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      }[c])
-  );
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    c =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[c])
+  );
 /* =========================================================
-   COMPETITION TYPE
-   ========================================================= */
+   COMPETITION TYPE
+   ========================================================= */
 const competitionType = () =>
-  D.competitionType ===
-  COMPETITION_TYPES.INDIVIDUAL
-    ? COMPETITION_TYPES.INDIVIDUAL
-    : COMPETITION_TYPES.TEAM;
+  D.competitionType ===
+  COMPETITION_TYPES.INDIVIDUAL
+    ? COMPETITION_TYPES.INDIVIDUAL
+    : COMPETITION_TYPES.TEAM;
 const isTeamMode = () =>
-  competitionType() ===
-  COMPETITION_TYPES.TEAM;
+  competitionType() ===
+  COMPETITION_TYPES.TEAM;
 const competitionTypeLabel = () =>
-  isTeamMode()
-    ? "TEAM COMPETITION"
-    : "INDIVIDUAL COMPETITION";
+  isTeamMode()
+    ? "TEAM COMPETITION"
+    : "INDIVIDUAL COMPETITION";
 /* =========================================================
-   JUDGE COUNT
-   ========================================================= */
+   JUDGE COUNT
+   ========================================================= */
 const judgeCount = () => {
-  const value = Number(D.judgeCount);
-  return VALID_JUDGE_COUNTS.includes(value)
-    ? value
-    : 5;
+  const value = Number(D.judgeCount);
+  return VALID_JUDGE_COUNTS.includes(value)
+    ? value
+    : 5;
 };
 const activeJudges = () =>
-  Object.entries(J)
-    .filter(
-      ([id, judge]) =>
-        judge.no <= judgeCount()
-    )
-    .map(([id, judge]) => ({
-      id,
-      ...judge
-    }));
+  Object.entries(J)
+    .filter(
+      ([id, judge]) =>
+        judge.no <= judgeCount()
+    )
+    .map(([id, judge]) => ({
+      id,
+      ...judge
+    }));
 /* =========================================================
-   PERFORMANCE NUMBER
-   ========================================================= */
+   PERFORMANCE NUMBER
+   ========================================================= */
 const hasDrawNumber = performance => {
-  const n = Number(
-    performance?.number
-  );
-  return (
-    Number.isInteger(n) &&
-    n >= 1
-  );
+  const n = Number(
+    performance?.number
+  );
+  return (
+    Number.isInteger(n) &&
+    n >= 1
+  );
 };
 const performanceNumber = performance => {
-  if (
-    hasDrawNumber(performance)
-  ) {
-    return Number(
-      performance.number
-    );
-  }
-  /*
-    Backwards compatibility with
-    older records which used "order".
-  */
-  const oldOrder =
-    Number(performance?.order);
-  if (
-    Number.isInteger(oldOrder) &&
-    oldOrder >= 1
-  ) {
-    return oldOrder;
-  }
-  return Infinity;
+  if (
+    hasDrawNumber(performance)
+  ) {
+    return Number(
+      performance.number
+    );
+  }
+  /*
+    Backwards compatibility with
+    older records which used "order".
+  */
+  const oldOrder =
+    Number(performance?.order);
+  if (
+    Number.isInteger(oldOrder) &&
+    oldOrder >= 1
+  ) {
+    return oldOrder;
+  }
+  return Infinity;
 };
 /* =========================================================
-   CONTESTANTS / PERFORMANCES
-   ========================================================= */
+   CONTESTANTS / PERFORMANCES
+   ========================================================= */
 const cs = () =>
-  Object.entries(D.contestants || {})
-    .map(([id, x]) => ({
-      id,
-      ...x
-    }))
-    .sort((a, b) => {
-      const an =
-        performanceNumber(a);
-      const bn =
-        performanceNumber(b);
-      if (an !== bn) {
-        return an - bn;
-      }
-      return (
-        Number(a.createdAt || 0) -
-        Number(b.createdAt || 0)
-      );
-    });
+  Object.entries(D.contestants || {})
+    .map(([id, x]) => ({
+      id,
+      ...x
+    }))
+    .sort((a, b) => {
+      const an =
+        performanceNumber(a);
+      const bn =
+        performanceNumber(b);
+      if (an !== bn) {
+        return an - bn;
+      }
+      return (
+        Number(a.createdAt || 0) -
+        Number(b.createdAt || 0)
+      );
+    });
 /* =========================================================
-   SCORES
-   ========================================================= */
+   SCORES
+   ========================================================= */
 const S = () =>
-  D.scores || {};
+  D.scores || {};
 /* =========================================================
-   ACTIVE PERFORMANCE
-   ========================================================= */
+   ACTIVE PERFORMANCE
+   ========================================================= */
 const A = () =>
-  D.active
-    ? D.contestants?.[D.active]
-    : null;
+  D.active
+    ? D.contestants?.[D.active]
+    : null;
 /* =========================================================
-   CURRENT DRAFT TOTAL
-   ========================================================= */
+   CURRENT DRAFT TOTAL
+   ========================================================= */
 const T = () =>
-  C.reduce(
-    (total, [key]) =>
-      total +
-      (Number(draft[key]) || 0),
-    0
-  );
+  C.reduce(
+    (total, [key]) =>
+      total +
+      (Number(draft[key]) || 0),
+    0
+  );
 /* =========================================================
-   TEAMS
-   ========================================================= */
+   TEAMS
+   ========================================================= */
 const teams = () =>
-  Object.entries(D.teams || {})
-    .map(([id, value]) => ({
-      id,
-      name:
-        typeof value === "string"
-          ? value
-          : value?.name || ""
-    }))
-    .filter(x => x.name)
-    .sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+  Object.entries(D.teams || {})
+    .map(([id, value]) => ({
+      id,
+      name:
+        typeof value === "string"
+          ? value
+          : value?.name || ""
+    }))
+    .filter(x => x.name)
+    .sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
 /* =========================================================
-   TEAM NAME
-   ========================================================= */
+   TEAM NAME
+   ========================================================= */
 const teamName = teamId => {
-  if (!teamId) {
-    return "";
-  }
-  const t =
-    D.teams?.[teamId];
-  if (
-    typeof t === "string"
-  ) {
-    return t;
-  }
-  return t?.name || "";
+  if (!teamId) {
+    return "";
+  }
+  const t =
+    D.teams?.[teamId];
+  if (
+    typeof t === "string"
+  ) {
+    return t;
+  }
+  return t?.name || "";
 };
 /* =========================================================
-   TEAM MEMBERS
-   ========================================================= */
+   TEAM MEMBERS
+   ========================================================= */
 const teamMembers = teamId => {
-  if (!teamId) {
-    return [];
-  }
-  const team =
-    D.teams?.[teamId];
-  if (
-    !team ||
-    typeof team === "string"
-  ) {
-    return [];
-  }
-  return Object.entries(
-    team.members || {}
-  )
-    .map(([id, member]) => ({
-      id,
-      ...member
-    }))
-    .sort((a, b) =>
-      String(a.memberId || a.id)
-        .localeCompare(
-          String(b.memberId || b.id)
-        )
-    );
+  if (!teamId) {
+    return [];
+  }
+  const team =
+    D.teams?.[teamId];
+  if (
+    !team ||
+    typeof team === "string"
+  ) {
+    return [];
+  }
+  return Object.entries(
+    team.members || {}
+  )
+    .map(([id, member]) => ({
+      id,
+      ...member
+    }))
+    .sort((a, b) =>
+      String(a.memberId || a.id)
+        .localeCompare(
+          String(b.memberId || b.id)
+        )
+    );
 };
 /* =========================================================
-   CONTESTANT TEAM
-   ========================================================= */
+   CONTESTANT TEAM
+   ========================================================= */
 const getContestantTeam =
-  contestant => {
-    if (!contestant) {
-      return "";
-    }
-    if (contestant.team) {
-      return contestant.team;
-    }
-    if (contestant.teamId) {
-      return teamName(
-        contestant.teamId
-      );
-    }
-    return "";
-  };
+  contestant => {
+    if (!contestant) {
+      return "";
+    }
+    if (contestant.team) {
+      return contestant.team;
+    }
+    if (contestant.teamId) {
+      return teamName(
+        contestant.teamId
+      );
+    }
+    return "";
+  };
 /* =========================================================
-   NUMBER VALIDATION
-   ========================================================= */
+   NUMBER VALIDATION
+   ========================================================= */
 const validNumber = (
-  value,
-  min,
-  max
+  value,
+  min,
+  max
 ) => {
-  const n =
-    Number(value);
-  return (
-    Number.isFinite(n) &&
-    Number.isInteger(n) &&
-    n >= min &&
-    n <= max
-  );
+  const n =
+    Number(value);
+  return (
+    Number.isFinite(n) &&
+    Number.isInteger(n) &&
+    n >= min &&
+    n <= max
+  );
 };
 /* =========================================================
-   DATABASE INITIALIZATION
-   ========================================================= */
+   DATABASE INITIALIZATION
+   ========================================================= */
 async function initializeEvent() {
-  const eventRef =
-    ref(db, "event");
-  const snap =
-    await get(eventRef);
-  if (!snap.exists()) {
-    await set(
-      eventRef,
-      {
-        name:
-          "Royal Karaoke SKN Championship",
-        venue: "",
-        date: "",
-        competitionType:
-          COMPETITION_TYPES.TEAM,
-        active: null,
-        contestants: {},
-        judges: J,
-        judgeCount: 5,
-        teams: {},
-        scores: {}
-      }
-    );
-    return;
-  }
-  const event =
-    snap.val() || {};
-  const updates = {};
-  if (
-    !VALID_JUDGE_COUNTS.includes(
-      Number(event.judgeCount)
-    )
-  ) {
-    updates[
-      "event/judgeCount"
-    ] = 5;
-  }
-  if (!event.judges) {
-    updates[
-      "event/judges"
-    ] = J;
-  }
-  if (!event.teams) {
-    updates[
-      "event/teams"
-    ] = {};
-  }
-  if (!event.contestants) {
-    updates[
-      "event/contestants"
-    ] = {};
-  }
-  if (!event.scores) {
-    updates[
-      "event/scores"
-    ] = {};
-  }
-  if (
-    ![
-      COMPETITION_TYPES.TEAM,
-      COMPETITION_TYPES.INDIVIDUAL
-    ].includes(
-      event.competitionType
-    )
-  ) {
-    updates[
-      "event/competitionType"
-    ] =
-      COMPETITION_TYPES.TEAM;
-  }
-  if (
-    Object.keys(updates).length
-  ) {
-    await update(
-      ref(db),
-      updates
-    );
-  }
+  const eventRef =
+    ref(db, "event");
+  const snap =
+    await get(eventRef);
+  if (!snap.exists()) {
+    await set(
+      eventRef,
+      {
+        name:
+          "Royal Karaoke SKN Championship",
+        venue: "",
+        competitionType:
+          COMPETITION_TYPES.TEAM,
+        active: null,
+        contestants: {},
+        judges: J,
+        judgeCount: 5,
+        teams: {},
+        scores: {}
+      }
+    );
+    return;
+  }
+  const event =
+    snap.val() || {};
+  const updates = {};
+  if (
+    !VALID_JUDGE_COUNTS.includes(
+      Number(event.judgeCount)
+    )
+  ) {
+    updates[
+      "event/judgeCount"
+    ] = 5;
+  }
+  if (!event.judges) {
+    updates[
+      "event/judges"
+    ] = J;
+  }
+  if (!event.teams) {
+    updates[
+      "event/teams"
+    ] = {};
+  }
+  if (!event.contestants) {
+    updates[
+      "event/contestants"
+    ] = {};
+  }
+  if (!event.scores) {
+    updates[
+      "event/scores"
+    ] = {};
+  }
+  if (
+    ![
+      COMPETITION_TYPES.TEAM,
+      COMPETITION_TYPES.INDIVIDUAL
+    ].includes(
+      event.competitionType
+    )
+  ) {
+    updates[
+      "event/competitionType"
+    ] =
+      COMPETITION_TYPES.TEAM;
+  }
+  if (
+    Object.keys(updates).length
+  ) {
+    await update(
+      ref(db),
+      updates
+    );
+  }
 }
 /* =========================================================
-   START
-   ========================================================= */
+   START
+   ========================================================= */
 async function start() {
-  try {
-    await signInAnonymously(
-      au
-    );
-  } catch (e) {
-    root.innerHTML = `
-      <div class="wrap">
-        <div class="card">
-          <h2>Firebase Authentication Error</h2>
-          <p>${E(e.message)}</p>
-        </div>
-      </div>
-    `;
-    return;
-  }
-  try {
-    await initializeEvent();
-  } catch (e) {
-    root.innerHTML = `
-      <div class="wrap">
-        <div class="card">
-          <h2>Firebase Setup Error</h2>
-          <p>${E(e.message)}</p>
-        </div>
-      </div>
-    `;
-    return;
-  }
-  onValue(
-    ref(db, "event"),
-    snapshot => {
-      const previousActive =
-        D.active || null;
-      D =
-        snapshot.val() || {};
-      if (
-        previousActive !==
-        D.active
-      ) {
-        draft = {};
-        draftPerformanceId =
-          D.active || null;
-      }
-      if (
-        role === "judge" &&
-        (
-          !jid ||
-          !J[jid] ||
-          J[jid].no >
-            judgeCount()
-        )
-      ) {
-        logout();
-        return;
-      }
-      render();
-    },
-    error => {
-      root.innerHTML = `
-        <div class="wrap">
-          <div class="card">
-            <h2>Firebase Database Error</h2>
-            <p>${E(error.message)}</p>
-          </div>
-        </div>
-      `;
-    }
-  );
+  try {
+    await signInAnonymously(
+      au
+    );
+  } catch (e) {
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="card">
+          <h2>Firebase Authentication Error</h2>
+          <p>${E(e.message)}</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  try {
+    await initializeEvent();
+  } catch (e) {
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="card">
+          <h2>Firebase Setup Error</h2>
+          <p>${E(e.message)}</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  onValue(
+    ref(db, "event"),
+    snapshot => {
+      const previousActive =
+        D.active || null;
+      D =
+        snapshot.val() || {};
+      if (
+        previousActive !==
+        D.active
+      ) {
+        draft = {};
+        draftPerformanceId =
+          D.active || null;
+      }
+      if (
+        role === "judge" &&
+        (
+          !jid ||
+          !J[jid] ||
+          J[jid].no >
+            judgeCount()
+        )
+      ) {
+        logout();
+        return;
+      }
+      render();
+    },
+    error => {
+      root.innerHTML = `
+        <div class="wrap">
+          <div class="card">
+            <h2>Firebase Database Error</h2>
+            <p>${E(error.message)}</p>
+          </div>
+        </div>
+      `;
+    }
+  );
 }
 /* =========================================================
-   HEADER
-   ========================================================= */
+   HEADER
+   ========================================================= */
 function head() {
-  return `
-    <div class="top">
-      <b>
-        🎤 ROYAL KARAOKE SKN
-        <br>
-        <small>
-          DIGITAL JUDGING SYSTEM
-        </small>
-      </b>
-      <span class="pill">
-        ${
-          role === "auditor"
-            ? `AUDITOR · ${judgeCount()} JUDGES`
-            : role === "judge"
-            ? `JUDGE ${J[jid]?.no || "?"}`
-            : "WELCOME"
-        }
-      </span>
-    </div>
-  `;
+  return `
+    <div class="top">
+      <b>
+        🎤 ROYAL KARAOKE SKN
+        <br>
+        <small>
+          DIGITAL JUDGING SYSTEM
+        </small>
+      </b>
+      <span class="pill">
+        ${
+          role === "auditor"
+            ? `AUDITOR · ${judgeCount()} JUDGES`
+            : role === "judge"
+            ? `JUDGE ${J[jid]?.no || "?"}`
+            : "WELCOME"
+        }
+      </span>
+    </div>
+  `;
 }
 /* =========================================================
-   LOGIN
-   ========================================================= */
+   LOGIN
+   ========================================================= */
 function login() {
-  const availableJudges =
-    activeJudges();
-  return `
-    <div class="wrap">
-      <div class="card hero">
-        <div class="big">
-          🎤
-        </div>
-        <h1>
-          Royal Karaoke SKN
-        </h1>
-        <h2>
-          100-Point Digital Judging System
-        </h2>
-        <p class="muted">
-          ${E(
-            competitionTypeLabel()
-          )}
-        </p>
-        <p class="muted">
-          Current competition:
-          <b>
-            ${judgeCount()} Judges
-          </b>
-        </p>
-                ${isJudgePortal() ? `
-          <h3>Judge Access</h3>
-          <p class="muted">This is the dedicated Judge Portal. Select your assigned judge below.</p>
-        ` : `
-          <button
-            id="aud"
-            class="primary"
-            type="button"
-          >
-            AUDITOR LOGIN
-          </button>
-          <p class="muted">Judges should use the dedicated Judge Portal URL.</p>
-        `}
-        ${isJudgePortal() ? `
-          <h3>
-            Select Judge
-          </h3>
-          <div class="login-grid">
-            ${availableJudges
-              .map(
-                judge => `
-                  <button
-                    class="jl"
-                    data-id="${E(judge.id)}"
-                    type="button"
-                  >
-                    ${E(judge.name)}
-                  </button>
-                `
-              )
-              .join("")}
-          </div>
-        ` : ""}
-      </div>
-    </div>
-  `;
+  const availableJudges =
+    activeJudges();
+  return `
+    <div class="wrap">
+      <div class="card hero">
+        <div class="big">
+          🎤
+        </div>
+        <h1>
+          Royal Karaoke SKN
+        </h1>
+        <h2>
+          100-Point Digital Judging System
+        </h2>
+        <p class="muted">
+          ${E(
+            competitionTypeLabel()
+          )}
+        </p>
+        <p class="muted">
+          Current competition:
+          <b>
+            ${judgeCount()} Judges
+          </b>
+        </p>
+        <button
+          id="aud"
+          class="primary"
+          type="button"
+        >
+          AUDITOR
+        </button>
+        <h3>
+          Select Judge
+        </h3>
+        <div class="login-grid">
+          ${availableJudges
+            .map(
+              judge => `
+                <button
+                  class="jl"
+                  data-id="${E(judge.id)}"
+                  type="button"
+                >
+                  ${E(judge.name)}
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  `;
 }
 /* =========================================================
-   COMPETITION SETTINGS
-   ========================================================= */
+   COMPETITION SETTINGS
+   ========================================================= */
 function settingsCard() {
-  const hasData =
-    cs().length > 0 ||
-    teams().length > 0 ||
-    Object.keys(
-      S()
-    ).length > 0;
-  return `
-    <div class="card">        <h2>
-          ⚙️ Competition Settings
-        </h2>
-        <p><b>Competition Details</b></p>
-        <div class="form-grid">
-          <input id="competitionName" value="${E(D.name || "")}" placeholder="Competition Name" maxlength="150">
-          <input id="competitionVenue" value="${E(D.venue || "")}" placeholder="Venue" maxlength="150">
-          <input id="competitionDate" type="date" value="${E(D.date || "")}">
-        </div>
-        <br>
-        <button id="saveCompetitionDetails" class="primary" type="button">SAVE COMPETITION DETAILS</button>
-        <p class="muted">You can change the competition name, venue and date here without editing the code.</p>
-        <hr>
-        <p>
-          <b>
-            Competition Type
-        </b>
-      </p>
-      <div class="login-grid">
-        <button
-          id="competitionTeam"
-          type="button"
-          class="${
-            isTeamMode()
-              ? "primary"
-              : ""
-          }"
-        >
-          TEAM COMPETITION
-        </button>
-        <button
-          id="competitionIndividual"
-          type="button"
-          class="${
-            !isTeamMode()
-              ? "primary"
-              : ""
-          }"
-        >
-          INDIVIDUAL COMPETITION
-        </button>
-      </div>
-      <p>
-        Current:
-        <strong>
-          ${E(
-            competitionTypeLabel()
-          )}
-        </strong>
-      </p>
-      ${
-        hasData
-          ? `
-            <p class="warn">
-              Competition type is locked because
-              registration or scoring has already started.
-              Reset the competition before changing it.
-            </p>
-          `
-          : `
-            <p class="muted">
-              Choose the competition type before
-              registering contestants.
-            </p>
-          `
-      }
-      <hr>
-      <p>
-        <b>
-          Number of Judges
-        </b>
-      </p>
-      <div class="login-grid">
-        <button
-          id="judges3"
-          type="button"
-          class="${
-            judgeCount() === 3
-              ? "primary"
-              : ""
-          }"
-        >
-          3 JUDGES
-        </button>
-        <button
-          id="judges5"
-          type="button"
-          class="${
-            judgeCount() === 5
-              ? "primary"
-              : ""
-          }"
-        >
-          5 JUDGES
-        </button>
-      </div>
-      <p>
-        Current setting:
-        <strong>
-          ${judgeCount()} Judges
-        </strong>
-      </p>
-      <p class="muted">
-        A performance is complete only when
-        all ${judgeCount()} selected judges
-        have submitted their scores.
-      </p>
-    </div>
-  `;
+  const hasData =
+    cs().length > 0 ||
+    teams().length > 0 ||
+    Object.keys(
+      S()
+    ).length > 0;
+  return `
+    <div class="card">
+      <h2>
+        ⚙️ Competition Settings
+      </h2>
+      <p>
+        <b>
+          Competition Type
+        </b>
+      </p>
+      <div class="login-grid">
+        <button
+          id="competitionTeam"
+          type="button"
+          class="${
+            isTeamMode()
+              ? "primary"
+              : ""
+          }"
+        >
+          TEAM COMPETITION
+        </button>
+        <button
+          id="competitionIndividual"
+          type="button"
+          class="${
+            !isTeamMode()
+              ? "primary"
+              : ""
+          }"
+        >
+          INDIVIDUAL COMPETITION
+        </button>
+      </div>
+      <p>
+        Current:
+        <strong>
+          ${E(
+            competitionTypeLabel()
+          )}
+        </strong>
+      </p>
+      ${
+        hasData
+          ? `
+            <p class="warn">
+              Competition type is locked because
+              registration or scoring has already started.
+              Reset the competition before changing it.
+            </p>
+          `
+          : `
+            <p class="muted">
+              Choose the competition type before
+              registering contestants.
+            </p>
+          `
+      }
+      <hr>
+      <p>
+        <b>
+          Number of Judges
+        </b>
+      </p>
+      <div class="login-grid">
+        <button
+          id="judges3"
+          type="button"
+          class="${
+            judgeCount() === 3
+              ? "primary"
+              : ""
+          }"
+        >
+          3 JUDGES
+        </button>
+        <button
+          id="judges5"
+          type="button"
+          class="${
+            judgeCount() === 5
+              ? "primary"
+              : ""
+          }"
+        >
+          5 JUDGES
+        </button>
+      </div>
+      <p>
+        Current setting:
+        <strong>
+          ${judgeCount()} Judges
+        </strong>
+      </p>
+      <p class="muted">
+        A performance is complete only when
+        all ${judgeCount()} selected judges
+        have submitted their scores.
+      </p>
+    </div>
+  `;
 }
 /* =========================================================
-   RESET
-   ========================================================= */
+   RESET
+   ========================================================= */
 function resetCard() {
-  return `
-    <div class="card">
-      <h2>
-        ⚠️ New Competition / Reset Scores
-      </h2>
-      <p>
-        Use this when you are ready to clear the scores
-        and start a new competition.
-      </p>
-      <p class="muted">
-        Resetting will permanently remove:
-      </p>
-      <ul>
-        <li>All judge scores</li>
-        <li>The active performance</li>
-        <li>Any previous scoring data</li>
-      </ul>
-      <p class="warn">
-        Your contestants, teams, performance numbers,
-        competition name, venue, judges and judge count
-        will remain in place.
-      </p>
-      <p class="muted">
-        After the reset you can change between 3 or 5 judges
-        before activating the first performance.
-      </p>
-      <button
-        id="resetCompetition"
-        class="danger"
-        type="button"
-      >
-        ⚠️ RESET SCORES / NEW COMPETITION
-      </button>
-    </div>
-  `;
+  return `
+    <div class="card">
+      <h2>
+        ⚠️ New Competition / Reset Scores
+      </h2>
+      <p>
+        Use this when you are ready to clear the scores
+        and start a new competition.
+      </p>
+      <p class="muted">
+        Resetting will permanently remove:
+      </p>
+      <ul>
+        <li>All judge scores</li>
+        <li>The active performance</li>
+        <li>Any previous scoring data</li>
+      </ul>
+      <p class="warn">
+        Your contestants, teams, performance numbers,
+        competition name, venue, judges and judge count
+        will remain in place.
+      </p>
+      <p class="muted">
+        After the reset you can change between 3 or 5 judges
+        before activating the first performance.
+      </p>
+      <button
+        id="resetCompetition"
+        class="danger"
+        type="button"
+      >
+        ⚠️ RESET SCORES / NEW COMPETITION
+      </button>
+    </div>
+  `;
 }
 /* =========================================================
-   AUDITOR DASHBOARD
-   ========================================================= */
+   AUDITOR DASHBOARD
+   ========================================================= */
 function dash() {
-  const a = A();
-  const activeScores =
-    D.active
-      ? S()[D.active] || {}
-      : {};
-  const submitted =
-    activeJudges().filter(
-      judge =>
-        activeScores[judge.id]
-    ).length;
-  const complete =
-    submitted === judgeCount();
-  const numbered =
-    cs().filter(
-      hasDrawNumber
-    ).length;
-  const total =
-    cs().length;
-  const currentTeam =
-    getContestantTeam(a);
-  const activationCandidates =
-    cs().filter(
-      hasDrawNumber
-    );
-  return `
-    <h1>
-      Auditor Dashboard
-    </h1>
-    <div class="grid">
-      <div class="card">
-        <span class="muted">
-          Competition
-        </span>
-        <h2>
-          ${E(
-            D.name ||
-            "Royal Karaoke SKN Championship"
-          )}
-        </h2>
-        <p>
-          ${E(D.venue || "")}
-        </p>
-        ${D.date ? `<p><b>Date:</b> ${E(D.date)}</p>` : ""}
-        <p>
-          <b>
-            ${E(
-              competitionTypeLabel()
-            )}
-          </b>
-        </p>
-        <p>
-          <b>
-            ${judgeCount()} Judges
-          </b>
-        </p>
-      </div>
-      <div class="card">
-        <span class="muted">
-          Performance Numbers
-        </span>
-        <div class="stat">
-          ${numbered}/${total}
-        </div>
-        <p>
-          performances numbered
-        </p>
-        ${
-          total > 0 &&
-          numbered === total
-            ? `
-              <span class="ok">
-                ✓ DRAW COMPLETE
-              </span>
-            `
-            : total > 0
-            ? `
-              <span class="warn">
-                DRAW NUMBERS REQUIRED
-              </span>
-            `
-            : `
-              <span class="muted">
-                No performances registered
-              </span>
-            `
-        }
-      </div>
-      <div class="card">
-        <span class="muted">
-          Current Performance
-        </span>
-        ${
-          a
-            ? `
-              <div class="big">
-                #${E(a.number)}
-              </div>
-              <h2>
-                ${E(a.name)}
-                ${
-                  a.category === "Duet" &&
-                  a.name2
-                    ? `<br>& ${E(a.name2)}`
-                    : ""
-                }
-              </h2>
-              ${
-                currentTeam
-                  ? `
-                    <p>
-                      <b>
-                        Team:
-                      </b>
-                      ${E(currentTeam)}
-                    </p>
-                  `
-                  : ""
-              }
-              <p>
-                ${E(a.category || "")}
-              </p>
-            `
-            : `
-              <p>
-                No active performance
-              </p>
-            `
-        }
-      </div>
-      <div class="card">
-        <span class="muted">
-          Judges Submitted
-        </span>
-        <div class="stat">
-          ${submitted}/${judgeCount()}
-        </div>
-        ${
-          complete
-            ? `
-              <span class="ok">
-                ✓ COMPLETE
-              </span>
-            `
-            : `
-              <span class="warn">
-                WAITING
-              </span>
-            `
-        }
-      </div>
-    </div>
-    ${settingsCard()}
-    <div class="card">
-      <h2>
-        ▶ Activate Performance
-      </h2>
-      <p class="muted">
-        Only performances with a drawn performance
-        number can be activated.
-      </p>
-      ${
-        activationCandidates.length
-          ? `
-            <select id="act">
-              <option value="">
-                Select performance
-              </option>
-              ${activationCandidates
-                .map(x => {
-                  const team =
-                    getContestantTeam(x);
-                  return `
-                    <option
-                      value="${E(x.id)}"
-                      ${
-                        x.id === D.active
-                          ? "selected"
-                          : ""
-                      }
-                    >
-                      #${E(x.number)}
-                      —
-                      ${E(x.name)}
-                      ${
-                        x.category === "Duet" &&
-                        x.name2
-                          ? ` & ${E(x.name2)}`
-                          : ""
-                      }
-                      ${
-                        team
-                          ? ` — ${E(team)}`
-                          : ""
-                      }
-                    </option>
-                  `;
-                })
-                .join("")}
-            </select>
-            <br><br>
-            <button
-              id="activate"
-              class="primary"
-              type="button"
-            >
-              ACTIVATE PERFORMANCE
-            </button>
-          `
-          : `
-            <p class="warn">
-              No numbered performances are available.
-              Go to Contestants and assign the drawn numbers.
-            </p>
-          `
-      }
-    </div>
-    <div class="card">
-      <h2>
+  const a = A();
+  const activeScores =
+    D.active
+      ? S()[D.active] || {}
+      : {};
+  const submitted =
+    activeJudges().filter(
+      judge =>
+        activeScores[judge.id]
+    ).length;
+  const complete =
+    submitted === judgeCount();
+  const numbered =
+    cs().filter(
+      hasDrawNumber
+    ).length;
+  const total =
+    cs().length;
+  const currentTeam =
+    getContestantTeam(a);
+  const activationCandidates =
+    cs().filter(
+      hasDrawNumber
+    );
+  return `
+    <h1>
+      Auditor Dashboard
+    </h1>
+    <div class="grid">
+      <div class="card">
+        <span class="muted">
+          Competition
+        </span>
+        <h2>
+          ${E(
+            D.name ||
+            "Royal Karaoke SKN Championship"
+          )}
+        </h2>
+        <p>
+          ${E(D.venue || "")}
+        </p>
+        <p>
+          <b>
+            ${E(
+              competitionTypeLabel()
+            )}
+          </b>
+        </p>
+        <p>
+          <b>
+            ${judgeCount()} Judges
+          </b>
+        </p>
+      </div>
+      <div class="card">
+        <span class="muted">
+          Performance Numbers
+        </span>
+        <div class="stat">
+          ${numbered}/${total}
+        </div>
+        <p>
+          performances numbered
+        </p>
+        ${
+          total > 0 &&
+          numbered === total
+            ? `
+              <span class="ok">
+                ✓ DRAW COMPLETE
+              </span>
+            `
+            : total > 0
+            ? `
+              <span class="warn">
+                DRAW NUMBERS REQUIRED
+              </span>
+            `
+            : `
+              <span class="muted">
+                No performances registered
+              </span>
+            `
+        }
+      </div>
+      <div class="card">
+        <span class="muted">
+          Current Performance
+        </span>
+        ${
+          a
+            ? `
+              <div class="big">
+                #${E(a.number)}
+              </div>
+              <h2>
+                ${E(a.name)}
+                ${
+                  a.category === "Duet" &&
+                  a.name2
+                    ? `<br>& ${E(a.name2)}`
+                    : ""
+                }
+              </h2>
+              ${
+                currentTeam
+                  ? `
+                    <p>
+                      <b>
+                        Team:
+                      </b>
+                      ${E(currentTeam)}
+                    </p>
+                  `
+                  : ""
+              }
+              <p>
+                ${E(a.category || "")}
+              </p>
+            `
+            : `
+              <p>
+                No active performance
+              </p>
+            `
+        }
+      </div>
+      <div class="card">
+        <span class="muted">
+          Judges Submitted
+        </span>
+        <div class="stat">
+          ${submitted}/${judgeCount()}
+        </div>
+        ${
+          complete
+            ? `
+              <span class="ok">
+                ✓ COMPLETE
+              </span>
+            `
+            : `
+              <span class="warn">
+                WAITING
+              </span>
+            `
+        }
+      </div>
+    </div>
+    ${settingsCard()}
+    <div class="card">
+      <h2>
+        ▶ Activate Performance
+      </h2>
+      <p class="muted">
+        Only performances with a drawn performance
+        number can be activated.
+      </p>
+      ${
+        activationCandidates.length
+          ? `
+            <select id="act">
+              <option value="">
+                Select performance
+              </option>
+              ${activationCandidates
+                .map(x => {
+                  const team =
+                    getContestantTeam(x);
+                  return `
+                    <option
+                      value="${E(x.id)}"
+                      ${
+                        x.id === D.active
+                          ? "selected"
+                          : ""
+                      }
+                    >
+                      #${E(x.number)}
+                      —
+                      ${E(x.name)}
+                      ${
+                        x.category === "Duet" &&
+                        x.name2
+                          ? ` & ${E(x.name2)}`
+                          : ""
+                      }
+                      ${
+                        team
+                          ? ` — ${E(team)}`
+                          : ""
+                      }
+                    </option>
+                  `;
+                })
+                .join("")}
+            </select>
+            <br><br>
+            <button
+              id="activate"
+              class="primary"
+              type="button"
+            >
+              ACTIVATE PERFORMANCE
+            </button>
+          `
+          : `
+            <p class="warn">
+              No numbered performances are available.
+              Go to Contestants and assign the drawn numbers.
+            </p>
+          `
+      }
+    </div>
+    <div class="card">
+      <h2>
         Judge Status
       </h2>
       ${activeJudges().map(judge => {
@@ -918,44 +894,44 @@ function dash() {
     </div>
   </div>
 ${resetCard()}
-  `;
+  `;
 }
 /* =========================================================
-   TEAM MEMBER OPTIONS
-   ========================================================= */
+   TEAM MEMBER OPTIONS
+   ========================================================= */
 function memberOptions(
-  teamId,
-  selected = ""
+  teamId,
+  selected = ""
 ) {
-  const members =
-    teamMembers(teamId);
-  return `
-    <option value="">
-      Select Member
-    </option>
-    ${members
-      .map(member => `
-        <option
-          value="${E(member.id)}"
-          ${
-            selected === member.id
-              ? "selected"
-              : ""
-          }
-        >
-          ${E(member.memberId || "")}
-          —
-          ${E(member.name || "")}
-          —
-          ${E(member.gender || "")}
-        </option>
-      `)
-      .join("")}
-  `;
+  const members =
+    teamMembers(teamId);
+  return `
+    <option value="">
+      Select Member
+    </option>
+    ${members
+      .map(member => `
+        <option
+          value="${E(member.id)}"
+          ${
+            selected === member.id
+              ? "selected"
+              : ""
+          }
+        >
+          ${E(member.memberId || "")}
+          —
+          ${E(member.name || "")}
+          —
+          ${E(member.gender || "")}
+        </option>
+      `)
+      .join("")}
+  `;
 }
 /* =========================================================
-   TEAM REGISTRATION FORM
-   ========================================================= */
+   TEAM REGISTRATION FORM
+   ========================================================= */
 function teamRegistration() {
   const rows = Array.from({ length: 5 }, (_, index) => {
     const n = index + 1;
@@ -1025,594 +1001,594 @@ function teamRegistration() {
   `;
 }
 /* =========================================================
-   EXISTING TEAMS
-   ========================================================= */
+   EXISTING TEAMS
+   ========================================================= */
 function existingTeams() {
-  return `
-    <div class="card table-wrap">
-      <h2>
-        Registered Teams — 5 Members + 1 Duet
-      </h2>
-      ${
-        teams().length
-          ? `
-            <table>
-              <tr>
-                <th>
-                  Team ID
-                </th>
-                <th>
-                  Team Name
-                </th>
-                <th>
-                  Members
-                </th>
-                <th>
-                  Action
-                </th>
-              </tr>
-              ${teams()
-                .map(team => {
-                  const members =
-                    teamMembers(
-                      team.id
-                    );
-                  return `
-                    <tr>
-                      <td>
-                        ${
-                          typeof D.teams?.[team.id] ===
-                            "object"
-                            ? E(
-                                D.teams[
-                                  team.id
-                                ].teamId || ""
-                              )
-                            : "—"
-                        }
-                      </td>
-                      <td>
-                        <strong>
-                          ${E(team.name)}
-                        </strong>
-                      </td>
-                      <td>
-                        ${
-                          members.length
-                            ? members
-                                .map(
-                                  member =>
-                                    `
-                                      <div>
-                                        <strong>
-                                          ${E(
-                                            member.memberId ||
-                                            ""
-                                          )}
-                                        </strong>
-                                        —
-                                        ${E(
-                                          member.name ||
-                                          ""
-                                        )}
-                                        —
-                                        ${E(
-                                          member.gender ||
-                                          ""
-                                        )}
-                                        <br>
-                                        <span class="muted">
-                                          ${E(
-                                            member.song ||
-                                            ""
-                                          )}
-                                        </span>
-                                      </div>
-                                    `
-                                )
-                                .join(
-                                  "<hr>"
-                                )
-                            : `
-                              <span class="muted">
-                                No member roster stored
-                              </span>
-                            `
-                        }
-                      </td>
-                      <td>
-                        <button
-                          class="delete-team danger"
-                          data-id="${E(team.id)}"
-                          type="button"
-                        >
-                          Delete Team
-                        </button>
-                      </td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </table>
-          `
-          : `
-            <p>
-              No teams have been registered yet.
-            </p>
-          `
-      }
-    </div>
-  `;
+  return `
+    <div class="card table-wrap">
+      <h2>
+        Registered Teams — 5 Members + 1 Duet
+      </h2>
+      ${
+        teams().length
+          ? `
+            <table>
+              <tr>
+                <th>
+                  Team ID
+                </th>
+                <th>
+                  Team Name
+                </th>
+                <th>
+                  Members
+                </th>
+                <th>
+                  Action
+                </th>
+              </tr>
+              ${teams()
+                .map(team => {
+                  const members =
+                    teamMembers(
+                      team.id
+                    );
+                  return `
+                    <tr>
+                      <td>
+                        ${
+                          typeof D.teams?.[team.id] ===
+                            "object"
+                            ? E(
+                                D.teams[
+                                  team.id
+                                ].teamId || ""
+                              )
+                            : "—"
+                        }
+                      </td>
+                      <td>
+                        <strong>
+                          ${E(team.name)}
+                        </strong>
+                      </td>
+                      <td>
+                        ${
+                          members.length
+                            ? members
+                                .map(
+                                  member =>
+                                    `
+                                      <div>
+                                        <strong>
+                                          ${E(
+                                            member.memberId ||
+                                            ""
+                                          )}
+                                        </strong>
+                                        —
+                                        ${E(
+                                          member.name ||
+                                          ""
+                                        )}
+                                        —
+                                        ${E(
+                                          member.gender ||
+                                          ""
+                                        )}
+                                        <br>
+                                        <span class="muted">
+                                          ${E(
+                                            member.song ||
+                                            ""
+                                          )}
+                                        </span>
+                                      </div>
+                                    `
+                                )
+                                .join(
+                                  "<hr>"
+                                )
+                            : `
+                              <span class="muted">
+                                No member roster stored
+                              </span>
+                            `
+                        }
+                      </td>
+                      <td>
+                        <button
+                          class="delete-team danger"
+                          data-id="${E(team.id)}"
+                          type="button"
+                        >
+                          Delete Team
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                })
+                .join("")}
+            </table>
+          `
+          : `
+            <p>
+              No teams have been registered yet.
+            </p>
+          `
+      }
+    </div>
+  `;
 }
 /* =========================================================
-   TEAM OPTIONS FOR DUET REGISTRATION
-   ========================================================= */
+   TEAM OPTIONS FOR DUET REGISTRATION
+   ========================================================= */
 function teamOptions(selected = "") {
-  const list = teams();
-  return `
-    <option value="">
-      Select Team
-    </option>
-    ${list
-      .map(team => `
-        <option
-          value="${E(team.id)}"
-          ${
-            selected === team.id
-              ? "selected"
-              : ""
-          }
-        >
-          ${E(
-            team.teamId ||
-            (
-              typeof D.teams?.[team.id] === "object"
-                ? D.teams[team.id].teamId || ""
-                : ""
-            )
-          )}
-          ${
-            (
-              team.teamId ||
-              (
-                typeof D.teams?.[team.id] === "object"
-                  ? D.teams[team.id].teamId || ""
-                  : ""
-              )
-            )
-              ? " — "
-              : ""
-          }
-          ${E(team.name)}
-        </option>
-      `)
-      .join("")}
-  `;
+  const list = teams();
+  return `
+    <option value="">
+      Select Team
+    </option>
+    ${list
+      .map(team => `
+        <option
+          value="${E(team.id)}"
+          ${
+            selected === team.id
+              ? "selected"
+              : ""
+          }
+        >
+          ${E(
+            team.teamId ||
+            (
+              typeof D.teams?.[team.id] === "object"
+                ? D.teams[team.id].teamId || ""
+                : ""
+            )
+          )}
+          ${
+            (
+              team.teamId ||
+              (
+                typeof D.teams?.[team.id] === "object"
+                  ? D.teams[team.id].teamId || ""
+                  : ""
+              )
+            )
+              ? " — "
+              : ""
+          }
+          ${E(team.name)}
+        </option>
+      `)
+      .join("")}
+  `;
 }
 /* =========================================================
-   DUET REGISTRATION
-   ========================================================= */
+   DUET REGISTRATION
+   ========================================================= */
 function duetRegistration() {
-  return `
-    <div class="card">
-      <h2>
-        🎤 Register Team Duet
-      </h2>
-      <p class="muted">
-        Select two members from the same team.
-        The duet becomes a separate performance
-        and contributes one final score to the team.
-      </p>
-      ${
-        teams().length
-          ? `
-            <div class="form-grid">
-              <select id="duetTeam">
-                ${teamOptions()}
-              </select>
-              <select id="duetMember1">
-                <option value="">
-                  Select First Member
-                </option>
-              </select>
-              <select id="duetMember2">
-                <option value="">
-                  Select Second Member
-                </option>
-              </select>
-              <input
-                id="duetSong"
-                placeholder="Duet Song"
-                maxlength="150"
-              >
-            </div>
-            <br>
-            <button
-              id="addDuet"
-              class="primary"
-              type="button"
-            >
-              ADD DUET PERFORMANCE
-            </button>
-          `
-          : `
-            <p class="warn">
-              Create a team first before registering a duet.
-            </p>
-          `
-      }
-    </div>
-  `;
+  return `
+    <div class="card">
+      <h2>
+        🎤 Register Team Duet
+      </h2>
+      <p class="muted">
+        Select two members from the same team.
+        The duet becomes a separate performance
+        and contributes one final score to the team.
+      </p>
+      ${
+        teams().length
+          ? `
+            <div class="form-grid">
+              <select id="duetTeam">
+                ${teamOptions()}
+              </select>
+              <select id="duetMember1">
+                <option value="">
+                  Select First Member
+                </option>
+              </select>
+              <select id="duetMember2">
+                <option value="">
+                  Select Second Member
+                </option>
+              </select>
+              <input
+                id="duetSong"
+                placeholder="Duet Song"
+                maxlength="150"
+              >
+            </div>
+            <br>
+            <button
+              id="addDuet"
+              class="primary"
+              type="button"
+            >
+              ADD DUET PERFORMANCE
+            </button>
+          `
+          : `
+            <p class="warn">
+              Create a team first before registering a duet.
+            </p>
+          `
+      }
+    </div>
+  `;
 }
 /* =========================================================
-   INDIVIDUAL REGISTRATION
-   ========================================================= */
+   INDIVIDUAL REGISTRATION
+   ========================================================= */
 function individualRegistration() {
-  return `
-    <div class="card">
-      <h2>
-        🎤 Register Individual Contestant
-      </h2>
-      <p class="muted">
-        Performance numbers will be assigned later,
-        after the random draw on competition night.
-      </p>
-      <div class="form-grid">
-        <input
-          id="individualId"
-          placeholder="Contestant ID / Number"
-          maxlength="30"
-        >
-        <input
-          id="individualName"
-          placeholder="Contestant Name"
-          maxlength="100"
-        >
-        <select id="individualGender">
-          <option value="">
-            Select Gender
-          </option>
-          <option value="Male">
-            Male
-          </option>
-          <option value="Female">
-            Female
-          </option>
-        </select>
-        <input
-          id="individualSong"
-          placeholder="Song"
-          maxlength="150"
-        >
-      </div>
-      <br>
-      <button
-        id="addIndividual"
-        class="primary"
-        type="button"
-      >
-        REGISTER INDIVIDUAL
-      </button>
-    </div>
-  `;
+  return `
+    <div class="card">
+      <h2>
+        🎤 Register Individual Contestant
+      </h2>
+      <p class="muted">
+        Performance numbers will be assigned later,
+        after the random draw on competition night.
+      </p>
+      <div class="form-grid">
+        <input
+          id="individualId"
+          placeholder="Contestant ID / Number"
+          maxlength="30"
+        >
+        <input
+          id="individualName"
+          placeholder="Contestant Name"
+          maxlength="100"
+        >
+        <select id="individualGender">
+          <option value="">
+            Select Gender
+          </option>
+          <option value="Male">
+            Male
+          </option>
+          <option value="Female">
+            Female
+          </option>
+        </select>
+        <input
+          id="individualSong"
+          placeholder="Song"
+          maxlength="150"
+        >
+      </div>
+      <br>
+      <button
+        id="addIndividual"
+        class="primary"
+        type="button"
+      >
+        REGISTER INDIVIDUAL
+      </button>
+    </div>
+  `;
 }
 /* =========================================================
-   DRAW NUMBER SECTION
-   ========================================================= */
+   DRAW NUMBER SECTION
+   ========================================================= */
 function drawNumbers() {
-  const list =
-    cs();
-  if (!list.length) {
-    return `
-      <div class="card">
-        <h2>
-          🎲 Competition Night Draw
-        </h2>
-        <p>
-          No performances have been registered yet.
-        </p>
-      </div>
-    `;
-  }
-  const numbered =
-    list.filter(
-      hasDrawNumber
-    ).length;
-  return `
-    <div class="card">
-      <h2>
-        🎲 Assign Random Draw Numbers
-      </h2>
-      <p>
-        Enter the number drawn for each performance.
-        This is done on competition night.
-      </p>
-      <p class="muted">
-        Do not enter performance order during
-        registration. The drawn number automatically
-        determines the running order.
-      </p>
-      <p>
-        <strong>
-          ${numbered}/${list.length}
-        </strong>
-        performance numbers assigned.
-      </p>
-      <div class="table-wrap">
-        <table>
-          <tr>
-            <th>
-              Draw #
-            </th>
-            <th>
-              Performer
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Team
-            </th>
-            <th>
-              Song
-            </th>
-            <th>
-              Draw Number
-            </th>
-          </tr>
-          ${list
-            .map(x => {
-              const team =
-                getContestantTeam(x);
-              const performer =
-                x.category === "Duet" &&
-                x.name2
-                  ? `${x.name} & ${x.name2}`
-                  : x.name;
-              return `
-                <tr>
-                  <td>
-                    ${
-                      hasDrawNumber(x)
-                        ? `#${E(x.number)}`
-                        : "—"
-                    }
-                  </td>
-                  <td>
-                    <strong>
-                      ${E(performer)}
-                    </strong>
-                  </td>
-                  <td>
-                    ${E(
-                      x.category || ""
-                    )}
-                  </td>
-                  <td>
-                    ${E(
-                      team ||
-                      "Unassigned"
-                    )}
-                  </td>
-                  <td>
-                    ${E(
-                      x.song || ""
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      class="draw-number-input"
-                      data-id="${E(x.id)}"
-                      type="number"
-                      min="1"
-                      max="9999"
-                      value="${
-                        hasDrawNumber(x)
-                          ? E(x.number)
-                          : ""
-                      }"
-                      placeholder="Enter draw #"
-                      style="min-width:110px"
-                    >
-                  </td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </table>
-      </div>
-      <br>
-      <button
-        id="saveDrawNumbers"
-        class="primary"
-        type="button"
-      >
-        SAVE DRAW NUMBERS
-      </button>
-      <p class="muted">
-        Each number must be unique.
-        The system will automatically use the
-        numbers to determine singing order.
-      </p>
-    </div>
-  `;
+  const list =
+    cs();
+  if (!list.length) {
+    return `
+      <div class="card">
+        <h2>
+          🎲 Competition Night Draw
+        </h2>
+        <p>
+          No performances have been registered yet.
+        </p>
+      </div>
+    `;
+  }
+  const numbered =
+    list.filter(
+      hasDrawNumber
+    ).length;
+  return `
+    <div class="card">
+      <h2>
+        🎲 Assign Random Draw Numbers
+      </h2>
+      <p>
+        Enter the number drawn for each performance.
+        This is done on competition night.
+      </p>
+      <p class="muted">
+        Do not enter performance order during
+        registration. The drawn number automatically
+        determines the running order.
+      </p>
+      <p>
+        <strong>
+          ${numbered}/${list.length}
+        </strong>
+        performance numbers assigned.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>
+              Draw #
+            </th>
+            <th>
+              Performer
+            </th>
+            <th>
+              Type
+            </th>
+            <th>
+              Team
+            </th>
+            <th>
+              Song
+            </th>
+            <th>
+              Draw Number
+            </th>
+          </tr>
+          ${list
+            .map(x => {
+              const team =
+                getContestantTeam(x);
+              const performer =
+                x.category === "Duet" &&
+                x.name2
+                  ? `${x.name} & ${x.name2}`
+                  : x.name;
+              return `
+                <tr>
+                  <td>
+                    ${
+                      hasDrawNumber(x)
+                        ? `#${E(x.number)}`
+                        : "—"
+                    }
+                  </td>
+                  <td>
+                    <strong>
+                      ${E(performer)}
+                    </strong>
+                  </td>
+                  <td>
+                    ${E(
+                      x.category || ""
+                    )}
+                  </td>
+                  <td>
+                    ${E(
+                      team ||
+                      "Unassigned"
+                    )}
+                  </td>
+                  <td>
+                    ${E(
+                      x.song || ""
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      class="draw-number-input"
+                      data-id="${E(x.id)}"
+                      type="number"
+                      min="1"
+                      max="9999"
+                      value="${
+                        hasDrawNumber(x)
+                          ? E(x.number)
+                          : ""
+                      }"
+                      placeholder="Enter draw #"
+                      style="min-width:110px"
+                    >
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </table>
+      </div>
+      <br>
+      <button
+        id="saveDrawNumbers"
+        class="primary"
+        type="button"
+      >
+        SAVE DRAW NUMBERS
+      </button>
+      <p class="muted">
+        Each number must be unique.
+        The system will automatically use the
+        numbers to determine singing order.
+      </p>
+    </div>
+  `;
 }
 /* =========================================================
-   REGISTERED PERFORMANCE LIST
-   ========================================================= */
+   REGISTERED PERFORMANCE LIST
+   ========================================================= */
 function registeredPerformances() {
-  const list =
-    cs();
-  return `
-    <div class="card table-wrap">
-      <h2>
-        Registered Performances
-      </h2>
-      <table>
-        <tr>
-          <th>
-            Draw #
-          </th>
-          <th>
-            Performer
-          </th>
-          <th>
-            Type
-          </th>
-          <th>
-            ID
-          </th>
-          <th>
-            Gender
-          </th>
-          <th>
-            Team
-          </th>
-          <th>
-            Song
-          </th>
-          <th>
-            Status
-          </th>
-          <th>
-            Action
-          </th>
-        </tr>
-        ${
-          list.length
-            ? list
-                .map(x => {
-                  const team =
-                    getContestantTeam(x);
-                  const performer =
-                    x.category === "Duet" &&
-                    x.name2
-                      ? `
-                        <strong>
-                          ${E(x.name)}
-                        </strong>
-                        <br>
-                        & ${E(x.name2)}
-                      `
-                      : `
-                        <strong>
-                          ${E(x.name)}
-                        </strong>
-                      `;
-                  const ids =
-                    Array.isArray(
-                      x.memberIds
-                    )
-                      ? x.memberIds
-                          .map(
-                            memberKey => {
-                              const member =
-                                D.teams?.[
-                                  x.teamId
-                                ]?.members?.[
-                                  memberKey
-                                ];
-                              return (
-                                member?.memberId ||
-                                ""
-                              );
-                            }
-                          )
-                          .filter(Boolean)
-                          .join(" / ")
-                      : (
-                          x.contestantId ||
-                          ""
-                        );
-                  return `
-                    <tr>
-                      <td>
-                        ${
-                          hasDrawNumber(x)
-                            ? `#${E(x.number)}`
-                            : `
-                              <span class="warn">
-                                NOT DRAWN
-                              </span>
-                            `
-                        }
-                      </td>
-                      <td>
-                        ${performer}
-                      </td>
-                      <td>
-                        ${E(
-                          x.performerType ||
-                          x.category ||
-                          ""
-                        )}
-                      </td>
-                      <td>
-                        ${E(ids)}
-                      </td>
-                      <td>
-                        ${E(
-                          x.category === "Duet"
-                            ? "Duet"
-                            : x.category || ""
-                        )}
-                      </td>
-                      <td>
-                        ${E(
-                          team ||
-                          "Unassigned"
-                        )}
-                      </td>
-                      <td>
-                        ${E(
-                          x.song || ""
-                        )}
-                      </td>
-                      <td>
-                        ${
-                          S()[x.id]
-                            ? `
-                              <span class="ok">
-                                Scoring Started
-                              </span>
-                            `
-                            : `
-                              <span class="muted">
-                                Ready
-                              </span>
-                            `
-                        }
-                      </td>
-                      <td>
-                        <button
-                          class="del danger"
-                          data-id="${E(x.id)}"
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  `;
-                })
-                .join("")
-            : `
-                <tr>
-                  <td
-                    colspan="9"
-                  >
-                    No performances registered yet.
-                  </td>
-                </tr>
-              `
-        }
-      </table>
-    </div>
-  `;
+  const list =
+    cs();
+  return `
+    <div class="card table-wrap">
+      <h2>
+        Registered Performances
+      </h2>
+      <table>
+        <tr>
+          <th>
+            Draw #
+          </th>
+          <th>
+            Performer
+          </th>
+          <th>
+            Type
+          </th>
+          <th>
+            ID
+          </th>
+          <th>
+            Gender
+          </th>
+          <th>
+            Team
+          </th>
+          <th>
+            Song
+          </th>
+          <th>
+            Status
+          </th>
+          <th>
+            Action
+          </th>
+        </tr>
+        ${
+          list.length
+            ? list
+                .map(x => {
+                  const team =
+                    getContestantTeam(x);
+                  const performer =
+                    x.category === "Duet" &&
+                    x.name2
+                      ? `
+                        <strong>
+                          ${E(x.name)}
+                        </strong>
+                        <br>
+                        & ${E(x.name2)}
+                      `
+                      : `
+                        <strong>
+                          ${E(x.name)}
+                        </strong>
+                      `;
+                  const ids =
+                    Array.isArray(
+                      x.memberIds
+                    )
+                      ? x.memberIds
+                          .map(
+                            memberKey => {
+                              const member =
+                                D.teams?.[
+                                  x.teamId
+                                ]?.members?.[
+                                  memberKey
+                                ];
+                              return (
+                                member?.memberId ||
+                                ""
+                              );
+                            }
+                          )
+                          .filter(Boolean)
+                          .join(" / ")
+                      : (
+                          x.contestantId ||
+                          ""
+                        );
+                  return `
+                    <tr>
+                      <td>
+                        ${
+                          hasDrawNumber(x)
+                            ? `#${E(x.number)}`
+                            : `
+                              <span class="warn">
+                                NOT DRAWN
+                              </span>
+                            `
+                        }
+                      </td>
+                      <td>
+                        ${performer}
+                      </td>
+                      <td>
+                        ${E(
+                          x.performerType ||
+                          x.category ||
+                          ""
+                        )}
+                      </td>
+                      <td>
+                        ${E(ids)}
+                      </td>
+                      <td>
+                        ${E(
+                          x.category === "Duet"
+                            ? "Duet"
+                            : x.category || ""
+                        )}
+                      </td>
+                      <td>
+                        ${E(
+                          team ||
+                          "Unassigned"
+                        )}
+                      </td>
+                      <td>
+                        ${E(
+                          x.song || ""
+                        )}
+                      </td>
+                      <td>
+                        ${
+                          S()[x.id]
+                            ? `
+                              <span class="ok">
+                                Scoring Started
+                              </span>
+                            `
+                            : `
+                              <span class="muted">
+                                Ready
+                              </span>
+                            `
+                        }
+                      </td>
+                      <td>
+                        <button
+                          class="del danger"
+                          data-id="${E(x.id)}"
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                })
+                .join("")
+            : `
+                <tr>
+                  <td
+                    colspan="9"
+                  >
+                    No performances registered yet.
+                  </td>
+                </tr>
+              `
+        }
+      </table>
+    </div>
+  `;
 }
 /* =========================================================
-   CONTESTANTS PAGE
-   ========================================================= */
+   CONTESTANTS PAGE
+   ========================================================= */
 function cont() {
   return `
     <h1>Registration & Draw</h1>
@@ -1642,160 +1618,160 @@ function cont() {
   `;
 }
 /* =========================================================
-   LIVE SCORES
-   ========================================================= */
+   LIVE SCORES
+   ========================================================= */
 function live() {
-  const s =
-    D.active
-      ? S()[D.active] || {}
-      : {};
-  const a =
-    A();
-  const team =
-    getContestantTeam(a);
-  const submitted =
-    activeJudges().filter(
-      judge =>
-        s[judge.id]
-    ).length;
-  return `
-    <h1>
-      Live Scores
-    </h1>
-    <div class="card">
-      ${
-        a
-          ? `
-            <span class="muted">
-              CURRENT PERFORMANCE
-            </span>
-            <div class="big">
-              #${E(a.number)}
-            </div>
-            <h2>
-              ${E(a.name)}
-              ${
-                a.category === "Duet" &&
-                a.name2
-                  ? `<br>& ${E(a.name2)}`
-                  : ""
-              }
-            </h2>
-            ${
-              team
-                ? `
-                  <p>
-                    <b>
-                      Team:
-                    </b>
-                    ${E(team)}
-                  </p>
-                `
-                : ""
-            }
-            <p>
-              ${E(
-                a.category || ""
-              )}
-              ${
-                a.song
-                  ? ` · ${E(a.song)}`
-                  : ""
-              }
-            </p>
-            <p>
-              Judges:
-              <b>
-                ${submitted}/${judgeCount()}
-              </b>
-            </p>
-          `
-          : `
-            <h2>
-              No active performance
-            </h2>
-          `
-      }
-    </div>
-    <div class="grid">
-      ${activeJudges()
-        .map(judge => {
-          const score =
-            s[judge.id];
-          return `
-            <div class="card">
-              <h2>
-                ${E(judge.name)}
-              </h2>
-              ${
-                score
-                  ? `
-                    <div class="stat">
-                      ${Number(
-                        score.total || 0
-                      ).toFixed(0)}/100
-                    </div>
-                    <span class="ok">
-                      ✓ Submitted
-                    </span>
-                  `
-                  : `
-                    <span class="warn">
-                      Waiting
-                    </span>
-                  `
-              }
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
+  const s =
+    D.active
+      ? S()[D.active] || {}
+      : {};
+  const a =
+    A();
+  const team =
+    getContestantTeam(a);
+  const submitted =
+    activeJudges().filter(
+      judge =>
+        s[judge.id]
+    ).length;
+  return `
+    <h1>
+      Live Scores
+    </h1>
+    <div class="card">
+      ${
+        a
+          ? `
+            <span class="muted">
+              CURRENT PERFORMANCE
+            </span>
+            <div class="big">
+              #${E(a.number)}
+            </div>
+            <h2>
+              ${E(a.name)}
+              ${
+                a.category === "Duet" &&
+                a.name2
+                  ? `<br>& ${E(a.name2)}`
+                  : ""
+              }
+            </h2>
+            ${
+              team
+                ? `
+                  <p>
+                    <b>
+                      Team:
+                    </b>
+                    ${E(team)}
+                  </p>
+                `
+                : ""
+            }
+            <p>
+              ${E(
+                a.category || ""
+              )}
+              ${
+                a.song
+                  ? ` · ${E(a.song)}`
+                  : ""
+              }
+            </p>
+            <p>
+              Judges:
+              <b>
+                ${submitted}/${judgeCount()}
+              </b>
+            </p>
+          `
+          : `
+            <h2>
+              No active performance
+            </h2>
+          `
+      }
+    </div>
+    <div class="grid">
+      ${activeJudges()
+        .map(judge => {
+          const score =
+            s[judge.id];
+          return `
+            <div class="card">
+              <h2>
+                ${E(judge.name)}
+              </h2>
+              ${
+                score
+                  ? `
+                    <div class="stat">
+                      ${Number(
+                        score.total || 0
+                      ).toFixed(0)}/100
+                    </div>
+                    <span class="ok">
+                      ✓ Submitted
+                    </span>
+                  `
+                  : `
+                    <span class="warn">
+                      Waiting
+                    </span>
+                  `
+              }
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 /* =========================================================
-   PERFORMANCE RESULT
-   ========================================================= */
+   PERFORMANCE RESULT
+   ========================================================= */
 function performanceResult(id) {
-  const scoreObject =
-    S()[id] || {};
-  const scores =
-    activeJudges()
-      .map(
-        judge =>
-          scoreObject[judge.id]
-      )
-      .filter(
-        x =>
-          x &&
-          x.submitted === true
-      );
-  const complete =
-    scores.length ===
-    judgeCount();
-  const total =
-    scores.reduce(
-      (sum, score) =>
-        sum +
-        Number(
-          score.total || 0
-        ),
-      0
-    );
-  const avg =
-    scores.length
-      ? total / scores.length
-      : 0;
-  return {
-    scores,
-    submitted:
-      scores.length,
-    complete,
-    avg
-  };
+  const scoreObject =
+    S()[id] || {};
+  const scores =
+    activeJudges()
+      .map(
+        judge =>
+          scoreObject[judge.id]
+      )
+      .filter(
+        x =>
+          x &&
+          x.submitted === true
+      );
+  const complete =
+    scores.length ===
+    judgeCount();
+  const total =
+    scores.reduce(
+      (sum, score) =>
+        sum +
+        Number(
+          score.total || 0
+        ),
+      0
+    );
+  const avg =
+    scores.length
+      ? total / scores.length
+      : 0;
+  return {
+    scores,
+    submitted:
+      scores.length,
+    complete,
+    avg
+  };
 }
 /* =========================================================
-   RESULTS
-   ========================================================= */
+   RESULTS
+   ========================================================= */
 function teamResultDetails() {
   const teamList = teams();
   if (!teamList.length) {
@@ -1859,461 +1835,461 @@ function teamResultDetails() {
   `;
 }
 function results() {
-  const rows =
-    cs().map(x => {
-      const result =
-        performanceResult(
-          x.id
-        );
-      return {
-        ...x,
-        submitted:
-          result.submitted,
-        complete:
-          result.complete,
-        avg:
-          result.avg
-      };
-    });
-  const completeRows =
-    rows.filter(
-      x => x.complete
-    );
-  const sortByScore =
-    (a, b) =>
-      b.avg - a.avg;
-  const overallWinner =
-    completeRows
-      .slice()
-      .sort(sortByScore)[0];
-  const bestMale =
-    completeRows
-      .filter(
-        x =>
-          x.category ===
-          "Male"
-      )
-      .sort(sortByScore)[0];
-  const bestFemale =
-    completeRows
-      .filter(
-        x =>
-          x.category ===
-          "Female"
-      )
-      .sort(sortByScore)[0];
-  const bestDuet =
-    completeRows
-      .filter(
-        x =>
-          x.category ===
-          "Duet"
-      )
-      .sort(sortByScore)[0];
-  /* =======================================================
-     TEAM TOTALS
-     ======================================================= */
-  const teamTotals = {};
-  completeRows.forEach(
-    x => {
-      const team =
-        getContestantTeam(x);
-      if (!team) {
-        return;
-      }
-      if (!teamTotals[team]) {
-        teamTotals[team] = {
-          team,
-          total: 0,
-          performances: 0
-        };
-      }
-      /*
-        Every completed performance contributes
-        exactly once.
-      */
-      teamTotals[team].total +=
-        Number(x.avg || 0);
-      teamTotals[team].performances++;
-    }
-  );
-  teams().forEach(
-    t => {
-      if (
-        !teamTotals[t.name]
-      ) {
-        teamTotals[t.name] = {
-          team: t.name,
-          total: 0,
-          performances: 0
-        };
-      }
-    }
-  );
-  const teamRanking =
-    Object.values(
-      teamTotals
-    ).sort(
-      (a, b) =>
-        b.total - a.total
-    );
-  const bestTeam =
-    teamRanking.find(
-      x =>
-        x.performances > 0
-    );
-  /* =======================================================
-     WINNER CARD
-     ======================================================= */
-  const winnerCard = (
-    title,
-    winner
-  ) => {
-    if (!winner) {
-      return `
-        <div class="card winner">
-          <span class="muted">
-            ${E(title)}
-          </span>
-          <h2>
-            —
-          </h2>
-          <div class="big">
-            —
-          </div>
-          <p>
-            No completed result yet.
-          </p>
-        </div>
-      `;
-    }
-    return `
-      <div class="card winner">
-        <span class="muted">
-          🏆 ${E(title)}
-        </span>
-        <h2>
-          ${E(winner.name)}
-          ${
-            winner.category ===
-              "Duet" &&
-            winner.name2
-              ? `
-                <br>
-                & ${E(winner.name2)}
-              `
-              : ""
-          }
-        </h2>
-        ${
-          isTeamMode()
-            ? `
-              <p>
-                Team:
-                <b>
-                  ${E(
-                    getContestantTeam(
-                      winner
-                    ) ||
-                    "Unassigned"
-                  )}
-                </b>
-              </p>
-            `
-            : ""
-        }
-        <div class="big">
-          ${winner.avg.toFixed(2)}
-        </div>
-        <p>
-          /100
-        </p>
-      </div>
-    `;
-  };
-  const teamWinnerCard =
-    winner => {
-      if (!winner) {
-        return `
-          <div class="card winner">
-            <span class="muted">
-              🏆 Best Overall Team
-            </span>
-            <h2>
-              —
-            </h2>
-            <div class="big">
-              —
-            </div>
-            <p>
-              No completed team result yet.
-            </p>
-          </div>
-        `;
-      }
-      return `
-        <div class="card winner">
-          <span class="muted">
-            🏆 Best Overall Team
-          </span>
-          <h2>
-            ${E(winner.team)}
-          </h2>
-          <div class="big">
-            ${winner.total.toFixed(2)}
-          </div>
-          <p>
-            Team Points
-          </p>
-          <p>
-            ${winner.performances}
-            completed performance${
-              winner.performances === 1
-                ? ""
-                : "s"
-            }
-          </p>
-        </div>
-      `;
-    };
-  return `
-    <h1>
-      Competition Results
-    </h1>
-    <div class="card">
-      <h2>
-        ${E(
-          competitionTypeLabel()
-        )}
-      </h2>
-      <p>
-        Competition uses
-        <b>
-          ${judgeCount()} Judges
-        </b>
-      </p>
-      <p class="muted">
-        A performance is final only after
-        all ${judgeCount()} judges submit.
-      </p>
-    </div>
-    <!-- WINNERS -->
-    <div class="grid">
-      ${winnerCard(
-        "Overall Winner",
-        overallWinner
-      )}
-      ${winnerCard(
-        "Best Male",
-        bestMale
-      )}
-      ${winnerCard(
-        "Best Female",
-        bestFemale
-      )}
-      ${winnerCard(
-        "Best Duet",
-        bestDuet
-      )}
-      ${
-        isTeamMode()
-          ? teamWinnerCard(
-              bestTeam
-            )
-          : ""
-      }
-    </div>
-    ${
-      isTeamMode()
-        ? `
-          <div class="card table-wrap">
-            <h2>
-              🏆 Best Overall Team Ranking
-            </h2>
-            <p class="muted">
-              Team Total =
-              completed individual performance
-              scores +
-              completed duet performance scores.
-              Each performance contributes once.
-            </p>
-            <table>
-              <tr>
-                <th>
-                  Rank
-                </th>
-                <th>
-                  Team
-                </th>
-                <th>
-                  Performances
-                </th>
-                <th>
-                  Team Total
-                </th>
-              </tr>
-              ${
-                teamRanking.length
-                  ? teamRanking
-                      .map(
-                        (team, index) => `
-                          <tr>
-                            <td>
-                              ${
-                                team.performances
-                                  ? index + 1
-                                  : "—"
-                              }
-                            </td>
-                            <td>
-                              <strong>
-                                ${E(team.team)}
-                              </strong>
-                            </td>
-                            <td>
-                              ${team.performances}
-                            </td>
-                            <td>
-                              <strong>
-                                ${team.total.toFixed(2)}
-                              </strong>
-                            </td>
-                          </tr>
-                        `
-                      )
-                      .join("")
-                  : `
-                      <tr>
-                        <td colspan="4">
-                          No teams registered.
-                        </td>
-                      </tr>
-                    `
-              }
-            </table>
-          </div>
-        `
-        : ""
-    }
-    <!-- PERFORMANCE RESULTS -->
-    <div class="card table-wrap">
-      <h2>
-        Performance Results
-      </h2>
-      <table>
-        <tr>
-          <th>
-            Rank
-          </th>
-          <th>
-            #
-          </th>
-          <th>
-            Contestant
-          </th>
-          <th>
-            Category
-          </th>
-          ${
-            isTeamMode()
-              ? `
-                <th>
-                  Team
-                </th>
-              `
-              : ""
-          }
-          <th>
-            Judges
-          </th>
-          <th>
-            Final Score
-          </th>
-        </tr>
-        ${
-          rows
-            .slice()
-            .sort(
-              (a, b) =>
-                b.avg - a.avg
-            )
-            .map(
-              (x, index) => `
-                <tr>
-                  <td>
-                    ${
-                      x.complete
-                        ? index + 1
-                        : "—"
-                    }
-                  </td>
-                  <td>
-                    ${
-                      hasDrawNumber(x)
-                        ? E(x.number)
-                        : "—"
-                    }
-                  </td>
-                  <td>
-                    <strong>
-                      ${E(x.name)}
-                    </strong>
-                    ${
-                      x.category ===
-                        "Duet" &&
-                      x.name2
-                        ? `
-                          <br>
-                          & ${E(x.name2)}
-                        `
-                        : ""
-                    }
-                  </td>
-                  <td>
-                    ${E(x.category)}
-                  </td>
-                  ${
-                    isTeamMode()
-                      ? `
-                        <td>
-                          ${E(
-                            getContestantTeam(x) ||
-                            "Unassigned"
-                          )}
-                        </td>
-                      `
-                      : ""
-                  }
-                  <td>
-                    ${x.submitted}/${judgeCount()}
-                  </td>
-                  <td>
-                    ${
-                      x.complete
-                        ? `
-                          <strong>
-                            ${x.avg.toFixed(2)}
-                          </strong>
-                        `
-                        : `
-                          <span class="warn">
-                            Pending
-                          </span>
-                        `
-                    }
-                  </td>
-                </tr>
-              `
-            )
-            .join("")
-        }
-      </table>
-    </div>
-  `;
+  const rows =
+    cs().map(x => {
+      const result =
+        performanceResult(
+          x.id
+        );
+      return {
+        ...x,
+        submitted:
+          result.submitted,
+        complete:
+          result.complete,
+        avg:
+          result.avg
+      };
+    });
+  const completeRows =
+    rows.filter(
+      x => x.complete
+    );
+  const sortByScore =
+    (a, b) =>
+      b.avg - a.avg;
+  const overallWinner =
+    completeRows
+      .slice()
+      .sort(sortByScore)[0];
+  const bestMale =
+    completeRows
+      .filter(
+        x =>
+          x.category ===
+          "Male"
+      )
+      .sort(sortByScore)[0];
+  const bestFemale =
+    completeRows
+      .filter(
+        x =>
+          x.category ===
+          "Female"
+      )
+      .sort(sortByScore)[0];
+  const bestDuet =
+    completeRows
+      .filter(
+        x =>
+          x.category ===
+          "Duet"
+      )
+      .sort(sortByScore)[0];
+  /* =======================================================
+     TEAM TOTALS
+     ======================================================= */
+  const teamTotals = {};
+  completeRows.forEach(
+    x => {
+      const team =
+        getContestantTeam(x);
+      if (!team) {
+        return;
+      }
+      if (!teamTotals[team]) {
+        teamTotals[team] = {
+          team,
+          total: 0,
+          performances: 0
+        };
+      }
+      /*
+        Every completed performance contributes
+        exactly once.
+      */
+      teamTotals[team].total +=
+        Number(x.avg || 0);
+      teamTotals[team].performances++;
+    }
+  );
+  teams().forEach(
+    t => {
+      if (
+        !teamTotals[t.name]
+      ) {
+        teamTotals[t.name] = {
+          team: t.name,
+          total: 0,
+          performances: 0
+        };
+      }
+    }
+  );
+  const teamRanking =
+    Object.values(
+      teamTotals
+    ).sort(
+      (a, b) =>
+        b.total - a.total
+    );
+  const bestTeam =
+    teamRanking.find(
+      x =>
+        x.performances > 0
+    );
+  /* =======================================================
+     WINNER CARD
+     ======================================================= */
+  const winnerCard = (
+    title,
+    winner
+  ) => {
+    if (!winner) {
+      return `
+        <div class="card winner">
+          <span class="muted">
+            ${E(title)}
+          </span>
+          <h2>
+            —
+          </h2>
+          <div class="big">
+            —
+          </div>
+          <p>
+            No completed result yet.
+          </p>
+        </div>
+      `;
+    }
+    return `
+      <div class="card winner">
+        <span class="muted">
+          🏆 ${E(title)}
+        </span>
+        <h2>
+          ${E(winner.name)}
+          ${
+            winner.category ===
+              "Duet" &&
+            winner.name2
+              ? `
+                <br>
+                & ${E(winner.name2)}
+              `
+              : ""
+          }
+        </h2>
+        ${
+          isTeamMode()
+            ? `
+              <p>
+                Team:
+                <b>
+                  ${E(
+                    getContestantTeam(
+                      winner
+                    ) ||
+                    "Unassigned"
+                  )}
+                </b>
+              </p>
+            `
+            : ""
+        }
+        <div class="big">
+          ${winner.avg.toFixed(2)}
+        </div>
+        <p>
+          /100
+        </p>
+      </div>
+    `;
+  };
+  const teamWinnerCard =
+    winner => {
+      if (!winner) {
+        return `
+          <div class="card winner">
+            <span class="muted">
+              🏆 Best Overall Team
+            </span>
+            <h2>
+              —
+            </h2>
+            <div class="big">
+              —
+            </div>
+            <p>
+              No completed team result yet.
+            </p>
+          </div>
+        `;
+      }
+      return `
+        <div class="card winner">
+          <span class="muted">
+            🏆 Best Overall Team
+          </span>
+          <h2>
+            ${E(winner.team)}
+          </h2>
+          <div class="big">
+            ${winner.total.toFixed(2)}
+          </div>
+          <p>
+            Team Points
+          </p>
+          <p>
+            ${winner.performances}
+            completed performance${
+              winner.performances === 1
+                ? ""
+                : "s"
+            }
+          </p>
+        </div>
+      `;
+    };
+  return `
+    <h1>
+      Competition Results
+    </h1>
+    <div class="card">
+      <h2>
+        ${E(
+          competitionTypeLabel()
+        )}
+      </h2>
+      <p>
+        Competition uses
+        <b>
+          ${judgeCount()} Judges
+        </b>
+      </p>
+      <p class="muted">
+        A performance is final only after
+        all ${judgeCount()} judges submit.
+      </p>
+    </div>
+    <!-- WINNERS -->
+    <div class="grid">
+      ${winnerCard(
+        "Overall Winner",
+        overallWinner
+      )}
+      ${winnerCard(
+        "Best Male",
+        bestMale
+      )}
+      ${winnerCard(
+        "Best Female",
+        bestFemale
+      )}
+      ${winnerCard(
+        "Best Duet",
+        bestDuet
+      )}
+      ${
+        isTeamMode()
+          ? teamWinnerCard(
+              bestTeam
+            )
+          : ""
+      }
+    </div>
+    ${
+      isTeamMode()
+        ? `
+          <div class="card table-wrap">
+            <h2>
+              🏆 Best Overall Team Ranking
+            </h2>
+            <p class="muted">
+              Team Total =
+              completed individual performance
+              scores +
+              completed duet performance scores.
+              Each performance contributes once.
+            </p>
+            <table>
+              <tr>
+                <th>
+                  Rank
+                </th>
+                <th>
+                  Team
+                </th>
+                <th>
+                  Performances
+                </th>
+                <th>
+                  Team Total
+                </th>
+              </tr>
+              ${
+                teamRanking.length
+                  ? teamRanking
+                      .map(
+                        (team, index) => `
+                          <tr>
+                            <td>
+                              ${
+                                team.performances
+                                  ? index + 1
+                                  : "—"
+                              }
+                            </td>
+                            <td>
+                              <strong>
+                                ${E(team.team)}
+                              </strong>
+                            </td>
+                            <td>
+                              ${team.performances}
+                            </td>
+                            <td>
+                              <strong>
+                                ${team.total.toFixed(2)}
+                              </strong>
+                            </td>
+                          </tr>
+                        `
+                      )
+                      .join("")
+                  : `
+                      <tr>
+                        <td colspan="4">
+                          No teams registered.
+                        </td>
+                      </tr>
+                    `
+              }
+            </table>
+          </div>
+        `
+        : ""
+    }
+    <!-- PERFORMANCE RESULTS -->
+    <div class="card table-wrap">
+      <h2>
+        Performance Results
+      </h2>
+      <table>
+        <tr>
+          <th>
+            Rank
+          </th>
+          <th>
+            #
+          </th>
+          <th>
+            Contestant
+          </th>
+          <th>
+            Category
+          </th>
+          ${
+            isTeamMode()
+              ? `
+                <th>
+                  Team
+                </th>
+              `
+              : ""
+          }
+          <th>
+            Judges
+          </th>
+          <th>
+            Final Score
+          </th>
+        </tr>
+        ${
+          rows
+            .slice()
+            .sort(
+              (a, b) =>
+                b.avg - a.avg
+            )
+            .map(
+              (x, index) => `
+                <tr>
+                  <td>
+                    ${
+                      x.complete
+                        ? index + 1
+                        : "—"
+                    }
+                  </td>
+                  <td>
+                    ${
+                      hasDrawNumber(x)
+                        ? E(x.number)
+                        : "—"
+                    }
+                  </td>
+                  <td>
+                    <strong>
+                      ${E(x.name)}
+                    </strong>
+                    ${
+                      x.category ===
+                        "Duet" &&
+                      x.name2
+                        ? `
+                          <br>
+                          & ${E(x.name2)}
+                        `
+                        : ""
+                    }
+                  </td>
+                  <td>
+                    ${E(x.category)}
+                  </td>
+                  ${
+                    isTeamMode()
+                      ? `
+                        <td>
+                          ${E(
+                            getContestantTeam(x) ||
+                            "Unassigned"
+                          )}
+                        </td>
+                      `
+                      : ""
+                  }
+                  <td>
+                    ${x.submitted}/${judgeCount()}
+                  </td>
+                  <td>
+                    ${
+                      x.complete
+                        ? `
+                          <strong>
+                            ${x.avg.toFixed(2)}
+                          </strong>
+                        `
+                        : `
+                          <span class="warn">
+                            Pending
+                          </span>
+                        `
+                    }
+                  </td>
+                </tr>
+              `
+            )
+            .join("")
+        }
+      </table>
+    </div>
+  `;
 }
 /* =========================================================
-   JUDGE SCREEN
-   ========================================================= */
+   JUDGE SCREEN
+   ========================================================= */
 /* =========================================================
    JUDGE RETURN BUTTON
    ========================================================= */
@@ -2348,492 +2324,473 @@ async function saveJudgeCorrection() {
 }
 
 function judge() {
-  const a =
-    A();
-  if (!a) {
-    return `
-      <div class="wrap">
-        <div class="card hero">
-          <div class="big">
-            🎤
-          </div>
-          <h1>
-            Waiting for Auditor
-          </h1>
-          <p>
-            The next performance will appear
-            here automatically.
-          </p>
+  const a =
+    A();
+  if (!a) {
+    return `
+      <div class="wrap">
+        <div class="card hero">
+          <div class="big">
+            🎤
+          </div>
+          <h1>
+            Waiting for Auditor
+          </h1>
+          <p>
+            The next performance will appear
+            here automatically.
+          </p>
           ${judgeReturnButton()}
-        </div>
-      </div>
-    `;
-  }
-  if (
-    draftPerformanceId !==
-    D.active
-  ) {
-    draft = {};
-    draftPerformanceId =
-      D.active;
-  }
-  const old =
-    D.active
-      ? S()[D.active]?.[jid]
-      : null;
-  const team =
-    getContestantTeam(a);
-  /* LOCKED SCORE */
-  if (old) {
-    return `
-      <div class="wrap">
-        <div class="card hero">
-          <div class="big">
-            ✓
-          </div>
-          <h1>
-            Score Submitted
-          </h1>
-          <h2>
-            #${E(a.number)}
-            <br>
-            ${E(a.name)}
-            ${
-              a.category ===
-                "Duet" &&
-              a.name2
-                ? `
-                  <br>
-                  & ${E(a.name2)}
-                `
-                : ""
-            }
-          </h2>
-          ${
-            team
-              ? `
-                <p>
-                  Team:
-                  <b>
-                    ${E(team)}
-                  </b>
-                </p>
-              `
-              : ""
-          }
-          <div class="big">
-            ${Number(
-              old.total || 0
-            ).toFixed(0)}/100
-          </div>
-          <p class="ok">
-            Your score is locked.
-          </p>
-          <p class="muted">
-            You cannot change a submitted score.
-          </p>
-          <button
-            id="jout"
-            type="button"
-          >
-            Log Out
-          </button>
+        </div>
+      </div>
+    `;
+  }
+  if (
+    draftPerformanceId !==
+    D.active
+  ) {
+    draft = {};
+    draftPerformanceId =
+      D.active;
+  }
+  const old =
+    D.active
+      ? S()[D.active]?.[jid]
+      : null;
+  const team =
+    getContestantTeam(a);
+  /* LOCKED SCORE */
+  if (old) {
+    return `
+      <div class="wrap">
+        <div class="card hero">
+          <div class="big">
+            ✓
+          </div>
+          <h1>
+            Score Submitted
+          </h1>
+          <h2>
+            #${E(a.number)}
+            <br>
+            ${E(a.name)}
+            ${
+              a.category ===
+                "Duet" &&
+              a.name2
+                ? `
+                  <br>
+                  & ${E(a.name2)}
+                `
+                : ""
+            }
+          </h2>
+          ${
+            team
+              ? `
+                <p>
+                  Team:
+                  <b>
+                    ${E(team)}
+                  </b>
+                </p>
+              `
+              : ""
+          }
+          <div class="big">
+            ${Number(
+              old.total || 0
+            ).toFixed(0)}/100
+          </div>
+          <p class="ok">
+            Your score is locked.
+          </p>
+          <p class="muted">
+            You cannot change a submitted score.
+          </p>
+          <button
+            id="jout"
+            type="button"
+          >
+            Log Out
+          </button>
           ${judgeReturnButton()}
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <div class="wrap">
-      <div class="card hero">
-        <span class="pill">
-          JUDGE ${J[jid]?.no || "?"}
-        </span>
-        <div class="big">
-          #${E(a.number)}
-        </div>
-        <h1>
-          ${E(a.name)}
-          ${
-            a.category ===
-              "Duet" &&
-            a.name2
-              ? `
-                <br>
-                & ${E(a.name2)}
-              `
-              : ""
-          }
-        </h1>
-        ${
-          team
-            ? `
-              <h2>
-                ${E(team)}
-              </h2>
-            `
-            : ""
-        }
-        <p>
-          ${E(
-            a.category || ""
-          )}
-          ${
-            a.song
-              ? ` · ${E(a.song)}`
-              : ""
-          }
-        </p>
-      </div>
-      <div class="card">
-        <div class="notice">
-          Complete every criterion.
-          <br>
-          Total possible:
-          <b>
-            ${MAX_TOTAL} points.
-          </b>
-        </div>
-        ${C.map(
-          ([key, label, max]) => `
-            <div class="score-block">
-              <div class="score-title">
-                <b>
-                  ${E(label)}
-                </b>
-                <span>
-                  ${draft[key] ?? 0}/${max}
-                </span>
-              </div>
-              <div class="score-buttons">
-                ${Array.from(
-                  {
-                    length:
-                      max + 1
-                  },
-                  (_, n) => `
-                    <button
-                      class="sb ${
-                        Number(
-                          draft[key]
-                        ) === n
-                          ? "selected"
-                          : ""
-                      }"
-                      data-k="${E(key)}"
-                      data-n="${n}"
-                      type="button"
-                    >
-                      ${n}
-                    </button>
-                  `
-                ).join("")}
-              </div>
-            </div>
-          `
-        ).join("")}
-        <div class="total">
-          TOTAL:
-          ${T()}
-          /
-          ${MAX_TOTAL}
-        </div>
-        <button
-          id="submit"
-          class="primary"
-          style="width:100%"
-          type="button"
-        >
-          SUBMIT SCORE — LOCK IT
-        </button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="wrap">
+      <div class="card hero">
+        <span class="pill">
+          JUDGE ${J[jid]?.no || "?"}
+        </span>
+        <div class="big">
+          #${E(a.number)}
+        </div>
+        <h1>
+          ${E(a.name)}
+          ${
+            a.category ===
+              "Duet" &&
+            a.name2
+              ? `
+                <br>
+                & ${E(a.name2)}
+              `
+              : ""
+          }
+        </h1>
+        ${
+          team
+            ? `
+              <h2>
+                ${E(team)}
+              </h2>
+            `
+            : ""
+        }
+        <p>
+          ${E(
+            a.category || ""
+          )}
+          ${
+            a.song
+              ? ` · ${E(a.song)}`
+              : ""
+          }
+        </p>
+      </div>
+      <div class="card">
+        <div class="notice">
+          Complete every criterion.
+          <br>
+          Total possible:
+          <b>
+            ${MAX_TOTAL} points.
+          </b>
+        </div>
+        ${C.map(
+          ([key, label, max]) => `
+            <div class="score-block">
+              <div class="score-title">
+                <b>
+                  ${E(label)}
+                </b>
+                <span>
+                  ${draft[key] ?? 0}/${max}
+                </span>
+              </div>
+              <div class="score-buttons">
+                ${Array.from(
+                  {
+                    length:
+                      max + 1
+                  },
+                  (_, n) => `
+                    <button
+                      class="sb ${
+                        Number(
+                          draft[key]
+                        ) === n
+                          ? "selected"
+                          : ""
+                      }"
+                      data-k="${E(key)}"
+                      data-n="${n}"
+                      type="button"
+                    >
+                      ${n}
+                    </button>
+                  `
+                ).join("")}
+              </div>
+            </div>
+          `
+        ).join("")}
+        <div class="total">
+          TOTAL:
+          ${T()}
+          /
+          ${MAX_TOTAL}
+        </div>
+        <button
+          id="submit"
+          class="primary"
+          style="width:100%"
+          type="button"
+        >
+          SUBMIT SCORE — LOCK IT
+        </button>
           ${judgeReturnButton()}
-      </div>
-    </div>
-  `;
+      </div>
+    </div>
+  `;
 }
 /* =========================================================
-   NAVIGATION
-   ========================================================= */
+   NAVIGATION
+   ========================================================= */
 function nav() {
-  return `
-    <div class="nav">
-      ${[
-        ["home", "Dashboard"],
-        ["contestants", "Registration"],
-        ["live", "Live Scores"],
-        ["results", "Results"]
-      ]
-        .map(
-          ([value, label]) => `
-            <button
-              class="nb ${
-                page === value
-                  ? "primary"
-                  : ""
-              }"
-              data-p="${value}"
-              type="button"
-            >
-              ${E(label)}
-            </button>
-          `
-        )
-        .join("")}
-      <button
-        id="out"
-        type="button"
-      >
-        Log Out
-      </button>
-    </div>
-  `;
+  return `
+    <div class="nav">
+      ${[
+        ["home", "Dashboard"],
+        ["contestants", "Registration"],
+        ["live", "Live Scores"],
+        ["results", "Results"]
+      ]
+        .map(
+          ([value, label]) => `
+            <button
+              class="nb ${
+                page === value
+                  ? "primary"
+                  : ""
+              }"
+              data-p="${value}"
+              type="button"
+            >
+              ${E(label)}
+            </button>
+          `
+        )
+        .join("")}
+      <button
+        id="out"
+        type="button"
+      >
+        Log Out
+      </button>
+    </div>
+  `;
 }
 /* =========================================================
-   LOGOUT
-   ========================================================= */
+   LOGOUT
+   ========================================================= */
 function logout() {
-  role = null;
-  jid = null;
-  draft = {};
-  submitting = false;
-  draftPerformanceId =
-    null;
-  localStorage.removeItem(
-    "rk_role"
-  );
-  localStorage.removeItem(
-    "rk_judge"
-  );
-  page = "home";
-  render();
+  role = null;
+  jid = null;
+  draft = {};
+  submitting = false;
+  draftPerformanceId =
+    null;
+  localStorage.removeItem(
+    "rk_role"
+  );
+  localStorage.removeItem(
+    "rk_judge"
+  );
+  page = "home";
+  render();
 }
 /* =========================================================
-   SAVE COMPETITION DETAILS
-   ========================================================= */
-async function saveCompetitionDetails() {
-  const name = document.getElementById("competitionName")?.value.trim();
-  const venue = document.getElementById("competitionVenue")?.value.trim();
-  const date = document.getElementById("competitionDate")?.value || "";
-  if (!name) {
-    alert("Please enter a competition name.");
-    return;
-  }
-  try {
-    await update(ref(db, "event"), { name, venue, date });
-    alert("Competition details saved successfully.");
-  } catch (error) {
-    console.error("Competition details error:", error);
-    alert("The competition details could not be saved.\n\n" + error.message);
-  }
-}
-/* =========================================================
-   CHANGE COMPETITION TYPE
-   ========================================================= */
+   CHANGE COMPETITION TYPE
+   ========================================================= */
 async function changeCompetitionType(
-  newType
+  newType
 ) {
-  if (
-    ![
-      COMPETITION_TYPES.TEAM,
-      COMPETITION_TYPES.INDIVIDUAL
-    ].includes(newType)
-  ) {
-    return;
-  }
-  if (
-    competitionType() ===
-    newType
-  ) {
-    return;
-  }
-  const hasData =
-    cs().length > 0 ||
-    teams().length > 0 ||
-    Object.keys(
-      S()
-    ).length > 0;
-  if (hasData) {
-    alert(
-      "The competition type cannot be changed after registration or scoring has started.\n\n" +
-      "Reset the competition first, then select the new competition type."
-    );
-    return;
-  }
-  const label =
-    newType ===
-    COMPETITION_TYPES.TEAM
-      ? "TEAM COMPETITION"
-      : "INDIVIDUAL COMPETITION";
-  if (
-    !confirm(
-      `Set this competition to ${label}?`
-    )
-  ) {
-    return;
-  }
-  try {
-    await set(
-      ref(
-        db,
-        "event/competitionType"
-      ),
-      newType
-    );
-  } catch (error) {
-    alert(
-      "Could not change competition type.\n\n" +
-      error.message
-    );
-  }
+  if (
+    ![
+      COMPETITION_TYPES.TEAM,
+      COMPETITION_TYPES.INDIVIDUAL
+    ].includes(newType)
+  ) {
+    return;
+  }
+  if (
+    competitionType() ===
+    newType
+  ) {
+    return;
+  }
+  const hasData =
+    cs().length > 0 ||
+    teams().length > 0 ||
+    Object.keys(
+      S()
+    ).length > 0;
+  if (hasData) {
+    alert(
+      "The competition type cannot be changed after registration or scoring has started.\n\n" +
+      "Reset the competition first, then select the new competition type."
+    );
+    return;
+  }
+  const label =
+    newType ===
+    COMPETITION_TYPES.TEAM
+      ? "TEAM COMPETITION"
+      : "INDIVIDUAL COMPETITION";
+  if (
+    !confirm(
+      `Set this competition to ${label}?`
+    )
+  ) {
+    return;
+  }
+  try {
+    await set(
+      ref(
+        db,
+        "event/competitionType"
+      ),
+      newType
+    );
+  } catch (error) {
+    alert(
+      "Could not change competition type.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   CHANGE JUDGE COUNT
-   ========================================================= */
+   CHANGE JUDGE COUNT
+   ========================================================= */
 async function changeJudgeCount(
-  newCount
+  newCount
 ) {
-  if (
-    !VALID_JUDGE_COUNTS.includes(
-      newCount
-    )
-  ) {
-    return;
-  }
-  const current =
-    judgeCount();
-  if (
-    current === newCount
-  ) {
-    return;
-  }
-  const existingScores =
-    Object.values(
-      S()
-    ).some(
-      performance =>
-        performance &&
-        Object.keys(
-          performance
-        ).length > 0
-    );
-  if (existingScores) {
-    const proceed =
-      confirm(
-        `This competition already has judge scores.\n\n` +
-        `Changing from ${current} judges to ${newCount} judges will erase ALL existing judge scores.\n\n` +
-        `Do you want to continue?`
-      );
-    if (!proceed) {
-      return;
-    }
-  } else {
-    const proceed =
-      confirm(
-        `Set this competition to ${newCount} judges?`
-      );
-    if (!proceed) {
-      return;
-    }
-  }
-  try {
-    if (existingScores) {
-      await set(
-        ref(
-          db,
-          "event/scores"
-        ),
-        {}
-      );
-    }
-    await set(
-      ref(
-        db,
-        "event/judgeCount"
-      ),
-      newCount
-    );
-    if (
-      role === "judge" &&
-      J[jid]?.no > newCount
-    ) {
-      logout();
-      return;
-    }
-    alert(
-      `Competition is now set for ${newCount} judges.`
-    );
-  } catch (error) {
-    alert(
-      "Could not change the number of judges.\n\n" +
-      error.message
-    );
-  }
+  if (
+    !VALID_JUDGE_COUNTS.includes(
+      newCount
+    )
+  ) {
+    return;
+  }
+  const current =
+    judgeCount();
+  if (
+    current === newCount
+  ) {
+    return;
+  }
+  const existingScores =
+    Object.values(
+      S()
+    ).some(
+      performance =>
+        performance &&
+        Object.keys(
+          performance
+        ).length > 0
+    );
+  if (existingScores) {
+    const proceed =
+      confirm(
+        `This competition already has judge scores.\n\n` +
+        `Changing from ${current} judges to ${newCount} judges will erase ALL existing judge scores.\n\n` +
+        `Do you want to continue?`
+      );
+    if (!proceed) {
+      return;
+    }
+  } else {
+    const proceed =
+      confirm(
+        `Set this competition to ${newCount} judges?`
+      );
+    if (!proceed) {
+      return;
+    }
+  }
+  try {
+    if (existingScores) {
+      await set(
+        ref(
+          db,
+          "event/scores"
+        ),
+        {}
+      );
+    }
+    await set(
+      ref(
+        db,
+        "event/judgeCount"
+      ),
+      newCount
+    );
+    if (
+      role === "judge" &&
+      J[jid]?.no > newCount
+    ) {
+      logout();
+      return;
+    }
+    alert(
+      `Competition is now set for ${newCount} judges.`
+    );
+  } catch (error) {
+    alert(
+      "Could not change the number of judges.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   RESET COMPETITION
-   ========================================================= */
+   RESET COMPETITION
+   ========================================================= */
 async function resetCompetition() {
-  const first =
-    confirm(
-      "⚠️ START NEW COMPETITION\n\n" +
-      "This will permanently remove ALL current judge scores and the active performance.\n\n" +
-      "Your contestants, teams, performance numbers, competition name, venue and judges will NOT be deleted.\n\n" +
-      "Do you want to continue?"
-    );
-  if (!first) {
-    return;
-  }
-  const typed =
-    prompt(
-      "FINAL CONFIRMATION\n\n" +
-      "Type RESET in capital letters to clear all scores and start a new competition."
-    );
-  if (typed !== "RESET") {
-    alert(
-      "Reset cancelled. Nothing was deleted."
-    );
-    return;
-  }
-  try {
-    // Remove only scoring data. Contestants and teams remain.
-    await set(
-      ref(db, "event/scores"),
-      {}
-    );
-    // No performance is active and the Auditor can choose
-    // either 3 or 5 judges before starting the first performance.
-    await update(
-      ref(db, "event"),
-      {
-        active: null
-      }
-    );
-    draft = {};
-    submitting = false;
-    draftPerformanceId = null;
-    judgeFromAuditor = false;
-    page = "home";
-    alert(
-      "NEW COMPETITION READY!\n\n" +
-      "All scores have been cleared.\n" +
-      "Your contestants and teams are still in place.\n\n" +
-      "You can now select 3 or 5 judges and activate the first performance."
-    );
-    render();
-  } catch (error) {
-    console.error(
-      "Competition reset error:",
-      error
-    );
-    alert(
-      "The competition could not be reset.\n\n" +
-      error.message
-    );
-  }
+  const first =
+    confirm(
+      "⚠️ START NEW COMPETITION\n\n" +
+      "This will permanently remove ALL current judge scores and the active performance.\n\n" +
+      "Your contestants, teams, performance numbers, competition name, venue and judges will NOT be deleted.\n\n" +
+      "Do you want to continue?"
+    );
+  if (!first) {
+    return;
+  }
+  const typed =
+    prompt(
+      "FINAL CONFIRMATION\n\n" +
+      "Type RESET in capital letters to clear all scores and start a new competition."
+    );
+  if (typed !== "RESET") {
+    alert(
+      "Reset cancelled. Nothing was deleted."
+    );
+    return;
+  }
+  try {
+    // Remove only scoring data. Contestants and teams remain.
+    await set(
+      ref(db, "event/scores"),
+      {}
+    );
+    // No performance is active and the Auditor can choose
+    // either 3 or 5 judges before starting the first performance.
+    await update(
+      ref(db, "event"),
+      {
+        active: null
+      }
+    );
+    draft = {};
+    submitting = false;
+    draftPerformanceId = null;
+    judgeFromAuditor = false;
+    page = "home";
+    alert(
+      "NEW COMPETITION READY!\n\n" +
+      "All scores have been cleared.\n" +
+      "Your contestants and teams are still in place.\n\n" +
+      "You can now select 3 or 5 judges and activate the first performance."
+    );
+    render();
+  } catch (error) {
+    console.error(
+      "Competition reset error:",
+      error
+    );
+    alert(
+      "The competition could not be reset.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   ADD TEAM WITH FIVE MEMBERS
-   ========================================================= */
+   ADD TEAM WITH FIVE MEMBERS
+   ========================================================= */
 async function addTeamRoster() {
   const teamId = document.getElementById("teamId")?.value.trim();
   const teamNameValue = document.getElementById("teamName")?.value.trim();
@@ -3010,845 +2967,845 @@ async function addTeamRoster() {
   }
 }
 /* =========================================================
-   ADD TEAM DUET
-   ========================================================= */
+   ADD TEAM DUET
+   ========================================================= */
 async function addDuet() {
-  const teamId =
-    document
-      .getElementById(
-        "duetTeam"
-      )
-      ?.value;
-  const member1Id =
-    document
-      .getElementById(
-        "duetMember1"
-      )
-      ?.value;
-  const member2Id =
-    document
-      .getElementById(
-        "duetMember2"
-      )
-      ?.value;
-  const song =
-    document
-      .getElementById(
-        "duetSong"
-      )
-      ?.value
-      .trim();
-  if (!teamId) {
-    alert(
-      "Select a team."
-    );
-    return;
-  }
-  if (!member1Id) {
-    alert(
-      "Select the first duet member."
-    );
-    return;
-  }
-  if (!member2Id) {
-    alert(
-      "Select the second duet member."
-    );
-    return;
-  }
-  if (
-    member1Id ===
-    member2Id
-  ) {
-    alert(
-      "A duet must have two different members."
-    );
-    return;
-  }
-  if (!song) {
-    alert(
-      "Enter the duet song."
-    );
-    return;
-  }
-  const members =
-    teamMembers(
-      teamId
-    );
-  const member1 =
-    members.find(
-      member =>
-        member.id ===
-        member1Id
-    );
-  const member2 =
-    members.find(
-      member =>
-        member.id ===
-        member2Id
-    );
-  if (
-    !member1 ||
-    !member2
-  ) {
-    alert(
-      "One or both selected team members could not be found."
-    );
-    return;
-  }
-  const team =
-    teamName(teamId);
-  try {
-    const performanceRef =
-      push(
-        ref(
-          db,
-          "event/contestants"
-        )
-      );
-    await set(
-      performanceRef,
-      {
-        number: null,
-        order: null,
-        name:
-          member1.name,
-        name2:
-          member2.name,
-        category:
-          "Duet",
-        song,
-        teamId:
-          teamId,
-        team,
-        memberIds:
-          [
-            member1Id,
-            member2Id
-          ],
-        contestantIds:
-          [
-            member1.memberId,
-            member2.memberId
-          ],
-        performerType:
-          "Duet",
-        performanceType:
-          "Duet",
-        createdAt:
-          Date.now()
-      }
-    );
-    alert(
-      `Duet registered successfully:\n\n` +
-      `${member1.name} & ${member2.name}\n` +
-      `Song: ${song}\n` +
-      `Team: ${team}`
-    );
-  } catch (error) {
-    alert(
-      "Could not register duet.\n\n" +
-      error.message
-    );
-  }
+  const teamId =
+    document
+      .getElementById(
+        "duetTeam"
+      )
+      ?.value;
+  const member1Id =
+    document
+      .getElementById(
+        "duetMember1"
+      )
+      ?.value;
+  const member2Id =
+    document
+      .getElementById(
+        "duetMember2"
+      )
+      ?.value;
+  const song =
+    document
+      .getElementById(
+        "duetSong"
+      )
+      ?.value
+      .trim();
+  if (!teamId) {
+    alert(
+      "Select a team."
+    );
+    return;
+  }
+  if (!member1Id) {
+    alert(
+      "Select the first duet member."
+    );
+    return;
+  }
+  if (!member2Id) {
+    alert(
+      "Select the second duet member."
+    );
+    return;
+  }
+  if (
+    member1Id ===
+    member2Id
+  ) {
+    alert(
+      "A duet must have two different members."
+    );
+    return;
+  }
+  if (!song) {
+    alert(
+      "Enter the duet song."
+    );
+    return;
+  }
+  const members =
+    teamMembers(
+      teamId
+    );
+  const member1 =
+    members.find(
+      member =>
+        member.id ===
+        member1Id
+    );
+  const member2 =
+    members.find(
+      member =>
+        member.id ===
+        member2Id
+    );
+  if (
+    !member1 ||
+    !member2
+  ) {
+    alert(
+      "One or both selected team members could not be found."
+    );
+    return;
+  }
+  const team =
+    teamName(teamId);
+  try {
+    const performanceRef =
+      push(
+        ref(
+          db,
+          "event/contestants"
+        )
+      );
+    await set(
+      performanceRef,
+      {
+        number: null,
+        order: null,
+        name:
+          member1.name,
+        name2:
+          member2.name,
+        category:
+          "Duet",
+        song,
+        teamId:
+          teamId,
+        team,
+        memberIds:
+          [
+            member1Id,
+            member2Id
+          ],
+        contestantIds:
+          [
+            member1.memberId,
+            member2.memberId
+          ],
+        performerType:
+          "Duet",
+        performanceType:
+          "Duet",
+        createdAt:
+          Date.now()
+      }
+    );
+    alert(
+      `Duet registered successfully:\n\n` +
+      `${member1.name} & ${member2.name}\n` +
+      `Song: ${song}\n` +
+      `Team: ${team}`
+    );
+  } catch (error) {
+    alert(
+      "Could not register duet.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   ADD INDIVIDUAL
-   ========================================================= */
+   ADD INDIVIDUAL
+   ========================================================= */
 async function addIndividual() {
-  const contestantId =
-    document
-      .getElementById(
-        "individualId"
-      )
-      ?.value
-      .trim();
-  const name =
-    document
-      .getElementById(
-        "individualName"
-      )
-      ?.value
-      .trim();
-  const gender =
-    document
-      .getElementById(
-        "individualGender"
-      )
-      ?.value;
-  const song =
-    document
-      .getElementById(
-        "individualSong"
-      )
-      ?.value
-      .trim();
-  if (!contestantId) {
-    alert(
-      "Enter the Contestant ID / Number."
-    );
-    return;
-  }
-  if (!name) {
-    alert(
-      "Enter the contestant name."
-    );
-    return;
-  }
-  if (
-    !["Male", "Female"]
-      .includes(gender)
-  ) {
-    alert(
-      "Select the contestant's gender."
-    );
-    return;
-  }
-  if (!song) {
-    alert(
-      "Enter the song."
-    );
-    return;
-  }
-  const duplicate =
-    cs().some(
-      contestant =>
-        String(
-          contestant.contestantId ||
-          contestant.memberId ||
-          ""
-        ).toLowerCase() ===
-        contestantId.toLowerCase()
-    );
-  if (duplicate) {
-    alert(
-      `Contestant ID "${contestantId}" is already registered.`
-    );
-    return;
-  }
-  try {
-    const performanceRef =
-      push(
-        ref(
-          db,
-          "event/contestants"
-        )
-      );
-    await set(
-      performanceRef,
-      {
-        number: null,
-        order: null,
-        name,
-        category:
-          gender,
-        song,
-        teamId:
-          "",
-        team:
-          "",
-        memberIds:
-          [],
-        contestantId,
-        performerType:
-          "Individual",
-        performanceType:
-          "Individual",
-        createdAt:
-          Date.now()
-      }
-    );
-    alert(
-      `Individual contestant "${name}" registered successfully.`
-    );
-  } catch (error) {
-    alert(
-      "Could not register individual contestant.\n\n" +
-      error.message
-    );
-  }
+  const contestantId =
+    document
+      .getElementById(
+        "individualId"
+      )
+      ?.value
+      .trim();
+  const name =
+    document
+      .getElementById(
+        "individualName"
+      )
+      ?.value
+      .trim();
+  const gender =
+    document
+      .getElementById(
+        "individualGender"
+      )
+      ?.value;
+  const song =
+    document
+      .getElementById(
+        "individualSong"
+      )
+      ?.value
+      .trim();
+  if (!contestantId) {
+    alert(
+      "Enter the Contestant ID / Number."
+    );
+    return;
+  }
+  if (!name) {
+    alert(
+      "Enter the contestant name."
+    );
+    return;
+  }
+  if (
+    !["Male", "Female"]
+      .includes(gender)
+  ) {
+    alert(
+      "Select the contestant's gender."
+    );
+    return;
+  }
+  if (!song) {
+    alert(
+      "Enter the song."
+    );
+    return;
+  }
+  const duplicate =
+    cs().some(
+      contestant =>
+        String(
+          contestant.contestantId ||
+          contestant.memberId ||
+          ""
+        ).toLowerCase() ===
+        contestantId.toLowerCase()
+    );
+  if (duplicate) {
+    alert(
+      `Contestant ID "${contestantId}" is already registered.`
+    );
+    return;
+  }
+  try {
+    const performanceRef =
+      push(
+        ref(
+          db,
+          "event/contestants"
+        )
+      );
+    await set(
+      performanceRef,
+      {
+        number: null,
+        order: null,
+        name,
+        category:
+          gender,
+        song,
+        teamId:
+          "",
+        team:
+          "",
+        memberIds:
+          [],
+        contestantId,
+        performerType:
+          "Individual",
+        performanceType:
+          "Individual",
+        createdAt:
+          Date.now()
+      }
+    );
+    alert(
+      `Individual contestant "${name}" registered successfully.`
+    );
+  } catch (error) {
+    alert(
+      "Could not register individual contestant.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   SAVE DRAW NUMBERS
-   ========================================================= */
+   SAVE DRAW NUMBERS
+   ========================================================= */
 async function saveDrawNumbers() {
-  const inputs =
-    [
-      ...document.querySelectorAll(
-        ".draw-number-input"
-      )
-    ];
-  if (!inputs.length) {
-    alert(
-      "There are no performances to number."
-    );
-    return;
-  }
-  const assignments = [];
-  const usedNumbers =
-    new Set();
-  for (
-    const input of inputs
-  ) {
-    const id =
-      input.dataset.id;
-    const number =
-      Number(
-        input.value
-      );
-    if (
-      !validNumber(
-        number,
-        1,
-        9999
-      )
-    ) {
-      alert(
-        "Every performance must have a valid draw number."
-      );
-      input.focus();
-      return;
-    }
-    if (
-      usedNumbers.has(number)
-    ) {
-      alert(
-        `Draw number ${number} has been assigned more than once.\n\nEach performance must have a unique number.`
-      );
-      input.focus();
-      return;
-    }
-    usedNumbers.add(
-      number
-    );
-    assignments.push({
-      id,
-      number
-    });
-  }
-  /*
-    Detect whether numbers are being changed
-    after scoring has already started.
-  */
-  let changedAfterScoring =
-    false;
-  assignments.forEach(
-    assignment => {
-      const existing =
-        D.contestants?.[
-          assignment.id
-        ];
-      if (!existing) {
-        return;
-      }
-      if (
-        Number(existing.number || 0) !==
-        assignment.number &&
-        S()[assignment.id] &&
-        Object.keys(
-          S()[assignment.id]
-        ).length
-      ) {
-        changedAfterScoring =
-          true;
-      }
-    }
-  );
-  if (
-    changedAfterScoring
-  ) {
-    const proceed =
-      confirm(
-        "One or more performances already have judge scores.\n\n" +
-        "Changing their draw numbers will change the displayed running order.\n\n" +
-        "Do you want to continue?"
-      );
-    if (!proceed) {
-      return;
-    }
-  }
-  const updates = {};
-  assignments.forEach(
-    assignment => {
-      updates[
-        `event/contestants/${assignment.id}/number`
-      ] =
-        assignment.number;
-      /*
-        Keep order synchronized for
-        backwards compatibility.
-      */
-      updates[
-        `event/contestants/${assignment.id}/order`
-      ] =
-        assignment.number;
-    }
-  );
-  try {
-    await update(
-      ref(db),
-      updates
-    );
-    alert(
-      `${assignments.length} performance number(s) saved successfully.\n\n` +
-      "The competition running order has been updated."
-    );
-  } catch (error) {
-    alert(
-      "Could not save draw numbers.\n\n" +
-      error.message
-    );
-  }
+  const inputs =
+    [
+      ...document.querySelectorAll(
+        ".draw-number-input"
+      )
+    ];
+  if (!inputs.length) {
+    alert(
+      "There are no performances to number."
+    );
+    return;
+  }
+  const assignments = [];
+  const usedNumbers =
+    new Set();
+  for (
+    const input of inputs
+  ) {
+    const id =
+      input.dataset.id;
+    const number =
+      Number(
+        input.value
+      );
+    if (
+      !validNumber(
+        number,
+        1,
+        9999
+      )
+    ) {
+      alert(
+        "Every performance must have a valid draw number."
+      );
+      input.focus();
+      return;
+    }
+    if (
+      usedNumbers.has(number)
+    ) {
+      alert(
+        `Draw number ${number} has been assigned more than once.\n\nEach performance must have a unique number.`
+      );
+      input.focus();
+      return;
+    }
+    usedNumbers.add(
+      number
+    );
+    assignments.push({
+      id,
+      number
+    });
+  }
+  /*
+    Detect whether numbers are being changed
+    after scoring has already started.
+  */
+  let changedAfterScoring =
+    false;
+  assignments.forEach(
+    assignment => {
+      const existing =
+        D.contestants?.[
+          assignment.id
+        ];
+      if (!existing) {
+        return;
+      }
+      if (
+        Number(existing.number || 0) !==
+        assignment.number &&
+        S()[assignment.id] &&
+        Object.keys(
+          S()[assignment.id]
+        ).length
+      ) {
+        changedAfterScoring =
+          true;
+      }
+    }
+  );
+  if (
+    changedAfterScoring
+  ) {
+    const proceed =
+      confirm(
+        "One or more performances already have judge scores.\n\n" +
+        "Changing their draw numbers will change the displayed running order.\n\n" +
+        "Do you want to continue?"
+      );
+    if (!proceed) {
+      return;
+    }
+  }
+  const updates = {};
+  assignments.forEach(
+    assignment => {
+      updates[
+        `event/contestants/${assignment.id}/number`
+      ] =
+        assignment.number;
+      /*
+        Keep order synchronized for
+        backwards compatibility.
+      */
+      updates[
+        `event/contestants/${assignment.id}/order`
+      ] =
+        assignment.number;
+    }
+  );
+  try {
+    await update(
+      ref(db),
+      updates
+    );
+    alert(
+      `${assignments.length} performance number(s) saved successfully.\n\n` +
+      "The competition running order has been updated."
+    );
+  } catch (error) {
+    alert(
+      "Could not save draw numbers.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   DELETE PERFORMANCE
-   ========================================================= */
+   DELETE PERFORMANCE
+   ========================================================= */
 async function deletePerformance(
-  id
+  id
 ) {
-  const contestant =
-    D.contestants?.[id];
-  if (!contestant) {
-    return;
-  }
-  if (
-    id === D.active
-  ) {
-    alert(
-      "You cannot delete the active performance.\n\n" +
-      "Activate another performance first."
-    );
-    return;
-  }
-  const scores =
-    S()[id] || {};
-  const scoreCount =
-    Object.keys(
-      scores
-    ).length;
-  let message =
-    "Delete this performance?";
-  if (
-    scoreCount > 0
-  ) {
-    message =
-      `This performance already has ${scoreCount} judge score(s).\n\n` +
-      "Deleting it will also delete those scores.\n\n" +
-      "Continue?";
-  }
-  if (
-    !confirm(message)
-  ) {
-    return;
-  }
-  try {
-    const updates = {};
-    updates[
-      `event/contestants/${id}`
-    ] = null;
-    updates[
-      `event/scores/${id}`
-    ] = null;
-    await update(
-      ref(db),
-      updates
-    );
-  } catch (error) {
-    alert(
-      "Could not delete performance.\n\n" +
-      error.message
-    );
-  }
+  const contestant =
+    D.contestants?.[id];
+  if (!contestant) {
+    return;
+  }
+  if (
+    id === D.active
+  ) {
+    alert(
+      "You cannot delete the active performance.\n\n" +
+      "Activate another performance first."
+    );
+    return;
+  }
+  const scores =
+    S()[id] || {};
+  const scoreCount =
+    Object.keys(
+      scores
+    ).length;
+  let message =
+    "Delete this performance?";
+  if (
+    scoreCount > 0
+  ) {
+    message =
+      `This performance already has ${scoreCount} judge score(s).\n\n` +
+      "Deleting it will also delete those scores.\n\n" +
+      "Continue?";
+  }
+  if (
+    !confirm(message)
+  ) {
+    return;
+  }
+  try {
+    const updates = {};
+    updates[
+      `event/contestants/${id}`
+    ] = null;
+    updates[
+      `event/scores/${id}`
+    ] = null;
+    await update(
+      ref(db),
+      updates
+    );
+  } catch (error) {
+    alert(
+      "Could not delete performance.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   DELETE TEAM
-   ========================================================= */
+   DELETE TEAM
+   ========================================================= */
 async function deleteTeam(
-  id
+  id
 ) {
-  const name =
-    teamName(id);
-  if (!name) {
-    return;
-  }
-  const performances =
-    cs().filter(
-      performance =>
-        performance.teamId === id ||
-        performance.team === name
-    );
-  if (
-    performances.some(
-      performance =>
-        performance.id ===
-        D.active
-    )
-  ) {
-    alert(
-      "This team has the active performance.\n\n" +
-      "Activate another performance before deleting the team."
-    );
-    return;
-  }
-  const hasScores =
-    performances.some(
-      performance =>
-        S()[performance.id] &&
-        Object.keys(
-          S()[performance.id]
-        ).length > 0
-    );
-  let message =
-    `Delete team "${name}"?`;
-  if (
-    performances.length
-  ) {
-    message +=
-      `\n\nThis will also remove ${performances.length} performance(s) belonging to this team.`;
-  }
-  if (
-    hasScores
-  ) {
-    message +=
-      "\n\nSome of those performances already have scores. Those scores will also be deleted.";
-  }
-  if (
-    !confirm(message)
-  ) {
-    return;
-  }
-  if (
-    hasScores
-  ) {
-    const finalConfirm =
-      confirm(
-        "FINAL CONFIRMATION\n\n" +
-        "This team has scored performances.\n\n" +
-        "Delete the team, its performances and their scores?"
-      );
-    if (!finalConfirm) {
-      return;
-    }
-  }
-  try {
-    const updates = {};
-    updates[
-      `event/teams/${id}`
-    ] = null;
-    performances.forEach(
-      performance => {
-        updates[
-          `event/contestants/${performance.id}`
-        ] = null;
-        updates[
-          `event/scores/${performance.id}`
-        ] = null;
-      }
-    );
-    await update(
-      ref(db),
-      updates
-    );
-    alert(
-      `Team "${name}" deleted.`
-    );
-  } catch (error) {
-    alert(
-      "Could not delete team.\n\n" +
-      error.message
-    );
-  }
+  const name =
+    teamName(id);
+  if (!name) {
+    return;
+  }
+  const performances =
+    cs().filter(
+      performance =>
+        performance.teamId === id ||
+        performance.team === name
+    );
+  if (
+    performances.some(
+      performance =>
+        performance.id ===
+        D.active
+    )
+  ) {
+    alert(
+      "This team has the active performance.\n\n" +
+      "Activate another performance before deleting the team."
+    );
+    return;
+  }
+  const hasScores =
+    performances.some(
+      performance =>
+        S()[performance.id] &&
+        Object.keys(
+          S()[performance.id]
+        ).length > 0
+    );
+  let message =
+    `Delete team "${name}"?`;
+  if (
+    performances.length
+  ) {
+    message +=
+      `\n\nThis will also remove ${performances.length} performance(s) belonging to this team.`;
+  }
+  if (
+    hasScores
+  ) {
+    message +=
+      "\n\nSome of those performances already have scores. Those scores will also be deleted.";
+  }
+  if (
+    !confirm(message)
+  ) {
+    return;
+  }
+  if (
+    hasScores
+  ) {
+    const finalConfirm =
+      confirm(
+        "FINAL CONFIRMATION\n\n" +
+        "This team has scored performances.\n\n" +
+        "Delete the team, its performances and their scores?"
+      );
+    if (!finalConfirm) {
+      return;
+    }
+  }
+  try {
+    const updates = {};
+    updates[
+      `event/teams/${id}`
+    ] = null;
+    performances.forEach(
+      performance => {
+        updates[
+          `event/contestants/${performance.id}`
+        ] = null;
+        updates[
+          `event/scores/${performance.id}`
+        ] = null;
+      }
+    );
+    await update(
+      ref(db),
+      updates
+    );
+    alert(
+      `Team "${name}" deleted.`
+    );
+  } catch (error) {
+    alert(
+      "Could not delete team.\n\n" +
+      error.message
+    );
+  }
 }
 /* =========================================================
-   VALIDATE JUDGE DRAFT
-   ========================================================= */
+   VALIDATE JUDGE DRAFT
+   ========================================================= */
 function validateDraft() {
-  for (
-    const [key, label, max]
-    of C
-  ) {
-    const value =
-      Number(
-        draft[key]
-      );
-    if (
-      !Number.isFinite(value) ||
-      !Number.isInteger(value) ||
-      value < 0 ||
-      value > max
-    ) {
-      return {
-        ok: false,
-        message:
-          `Invalid score for ${label}. Maximum is ${max}.`
-      };
-    }
-  }
-  const total =
-    T();
-  if (
-    !Number.isInteger(total) ||
-    total < 0 ||
-    total > MAX_TOTAL
-  ) {
-    return {
-      ok: false,
-      message:
-        "Invalid total score."
-    };
-  }
-  return {
-    ok: true,
-    total
-  };
+  for (
+    const [key, label, max]
+    of C
+  ) {
+    const value =
+      Number(
+        draft[key]
+      );
+    if (
+      !Number.isFinite(value) ||
+      !Number.isInteger(value) ||
+      value < 0 ||
+      value > max
+    ) {
+      return {
+        ok: false,
+        message:
+          `Invalid score for ${label}. Maximum is ${max}.`
+      };
+    }
+  }
+  const total =
+    T();
+  if (
+    !Number.isInteger(total) ||
+    total < 0 ||
+    total > MAX_TOTAL
+  ) {
+    return {
+      ok: false,
+      message:
+        "Invalid total score."
+    };
+  }
+  return {
+    ok: true,
+    total
+  };
 }
 /* =========================================================
-   WIRE
-   ========================================================= */
+   WIRE
+   ========================================================= */
 function wire() {
-  /* =======================================================
-     LOGIN
-     ======================================================= */
-  if (!role) {
-    document
-      .getElementById("aud")
-      ?.addEventListener(
-        "click",
-        () => {
-          role =
-            "auditor";
-          localStorage.setItem(
-            "rk_role",
-            role
-          );
-          page =
-            "home";
-          render();
-        }
-      );
-    document
-      .querySelectorAll(".jl")
-      .forEach(button => {
-        button.addEventListener(
-          "click",
-          () => {
-            const selectedJudge =
-              button.dataset.id;
-            if (
-              !J[selectedJudge]
-            ) {
-              alert(
-                "Invalid judge."
-              );
-              return;
-            }
-            if (
-              J[selectedJudge].no >
-              judgeCount()
-            ) {
-              alert(
-                "That judge is not enabled for this competition."
-              );
-              return;
-            }
-            judgeFromAuditor = false;
+  /* =======================================================
+     LOGIN
+     ======================================================= */
+  if (!role) {
+    document
+      .getElementById("aud")
+      ?.addEventListener(
+        "click",
+        () => {
+          role =
+            "auditor";
+          localStorage.setItem(
+            "rk_role",
+            role
+          );
+          page =
+            "home";
+          render();
+        }
+      );
+    document
+      .querySelectorAll(".jl")
+      .forEach(button => {
+        button.addEventListener(
+          "click",
+          () => {
+            const selectedJudge =
+              button.dataset.id;
+            if (
+              !J[selectedJudge]
+            ) {
+              alert(
+                "Invalid judge."
+              );
+              return;
+            }
+            if (
+              J[selectedJudge].no >
+              judgeCount()
+            ) {
+              alert(
+                "That judge is not enabled for this competition."
+              );
+              return;
+            }
+            judgeFromAuditor = false;
 role =
-              "judge";
-            jid =
-              selectedJudge;
-            localStorage.setItem(
-              "rk_role",
-              role
-            );
-            localStorage.setItem(
-              "rk_judge",
-              jid
-            );
-            draft = {};
-            draftPerformanceId =
-              D.active ||
-              null;
-            render();
-          }
-        );
-      });
-    return;
-  }
-  /* =======================================================
-     JUDGE
-     ======================================================= */
-  if (
-    role === "judge"
-  ) {
-    if (
-      !jid ||
-      !J[jid] ||
-      J[jid].no >
-        judgeCount()
-    ) {
-      logout();
-      return;
-    }
-    document
-      .querySelectorAll(".sb")
-      .forEach(button => {
-        button.addEventListener(
-          "click",
-          () => {
-            const key =
-              button.dataset.k;
-            const value =
-              Number(
-                button.dataset.n
-              );
-            const criterion =
-              C.find(
-                x =>
-                  x[0] === key
-              );
-            if (!criterion) {
-              return;
-            }
-            const max =
-              criterion[2];
-            if (
-              !validNumber(
-                value,
-                0,
-                max
-              )
-            ) {
-              alert(
-                "Invalid score."
-              );
-              return;
-            }
-            draft[key] =
-              value;
-            render();
-          }
-        );
-      });
-    document
-      .getElementById("submit")
-      ?.addEventListener(
-        "click",
-        async () => {
-          if (submitting) {
-            return;
-          }
-          if (!D.active) {
-            alert(
-              "There is no active performance."
-            );
-            return;
-          }
-          if (
-            !jid ||
-            !J[jid]
-          ) {
-            alert(
-              "Judge identification error."
-            );
-            return;
-          }
-          const validation =
-            validateDraft();
-          if (!validation.ok) {
-            alert(
-              validation.message
-            );
-            return;
-          }
-          const total =
-            validation.total;
-          const activeId =
-            D.active;
-          const contestant =
-            D.contestants?.[
-              activeId
-            ];
-          if (!contestant) {
-            alert(
-              "This performance no longer exists."
-            );
-            return;
-          }
-          if (
-            !confirm(
-              `Submit ${total}/${MAX_TOTAL}?\n\n` +
-              "This score will be permanently locked."
-            )
-          ) {
-            return;
-          }
-          submitting =
-            true;
-          try {
-            const scoreRef =
-              ref(
-                db,
-                `event/scores/${activeId}/${jid}`
-              );
-            const result =
-              await runTransaction(
-                scoreRef,
-                current => {
-                  if (
-                    current !== null
-                  ) {
-                    return;
-                  }
-                  return {
-                    ...draft,
-                    total,
-                    judgeId:
-                      jid,
-                    judgeNo:
-                      J[jid].no,
-                    submitted:
-                      true,
-                    submittedAt:
-                      Date.now()
-                  };
-                }
-              );
-            if (
-              !result.committed
-            ) {
-              alert(
-                "A score has already been submitted for this performance."
-              );
-              draft = {};
-              render();
-              return;
-            }
-            draft = {};
-            alert(
-              `Score submitted successfully: ${total}/${MAX_TOTAL}`
-            );
-            render();
-          } catch (error) {
-            console.error(
-              "Score submission error:",
-              error
-            );
-            alert(
-              "The score could not be submitted.\n\n" +
-              error.message
-            );
-          } finally {
-            submitting =
-              false;
-          }
-        }
-      );
-    document
-      .getElementById("jout")
-      ?.addEventListener(
-        "click",
-        logout
-      );
+              "judge";
+            jid =
+              selectedJudge;
+            localStorage.setItem(
+              "rk_role",
+              role
+            );
+            localStorage.setItem(
+              "rk_judge",
+              jid
+            );
+            draft = {};
+            draftPerformanceId =
+              D.active ||
+              null;
+            render();
+          }
+        );
+      });
+    return;
+  }
+  /* =======================================================
+     JUDGE
+     ======================================================= */
+  if (
+    role === "judge"
+  ) {
+    if (
+      !jid ||
+      !J[jid] ||
+      J[jid].no >
+        judgeCount()
+    ) {
+      logout();
+      return;
+    }
+    document
+      .querySelectorAll(".sb")
+      .forEach(button => {
+        button.addEventListener(
+          "click",
+          () => {
+            const key =
+              button.dataset.k;
+            const value =
+              Number(
+                button.dataset.n
+              );
+            const criterion =
+              C.find(
+                x =>
+                  x[0] === key
+              );
+            if (!criterion) {
+              return;
+            }
+            const max =
+              criterion[2];
+            if (
+              !validNumber(
+                value,
+                0,
+                max
+              )
+            ) {
+              alert(
+                "Invalid score."
+              );
+              return;
+            }
+            draft[key] =
+              value;
+            render();
+          }
+        );
+      });
+    document
+      .getElementById("submit")
+      ?.addEventListener(
+        "click",
+        async () => {
+          if (submitting) {
+            return;
+          }
+          if (!D.active) {
+            alert(
+              "There is no active performance."
+            );
+            return;
+          }
+          if (
+            !jid ||
+            !J[jid]
+          ) {
+            alert(
+              "Judge identification error."
+            );
+            return;
+          }
+          const validation =
+            validateDraft();
+          if (!validation.ok) {
+            alert(
+              validation.message
+            );
+            return;
+          }
+          const total =
+            validation.total;
+          const activeId =
+            D.active;
+          const contestant =
+            D.contestants?.[
+              activeId
+            ];
+          if (!contestant) {
+            alert(
+              "This performance no longer exists."
+            );
+            return;
+          }
+          if (
+            !confirm(
+              `Submit ${total}/${MAX_TOTAL}?\n\n` +
+              "This score will be permanently locked."
+            )
+          ) {
+            return;
+          }
+          submitting =
+            true;
+          try {
+            const scoreRef =
+              ref(
+                db,
+                `event/scores/${activeId}/${jid}`
+              );
+            const result =
+              await runTransaction(
+                scoreRef,
+                current => {
+                  if (
+                    current !== null
+                  ) {
+                    return;
+                  }
+                  return {
+                    ...draft,
+                    total,
+                    judgeId:
+                      jid,
+                    judgeNo:
+                      J[jid].no,
+                    submitted:
+                      true,
+                    submittedAt:
+                      Date.now()
+                  };
+                }
+              );
+            if (
+              !result.committed
+            ) {
+              alert(
+                "A score has already been submitted for this performance."
+              );
+              draft = {};
+              render();
+              return;
+            }
+            draft = {};
+            alert(
+              `Score submitted successfully: ${total}/${MAX_TOTAL}`
+            );
+            render();
+          } catch (error) {
+            console.error(
+              "Score submission error:",
+              error
+            );
+            alert(
+              "The score could not be submitted.\n\n" +
+              error.message
+            );
+          } finally {
+            submitting =
+              false;
+          }
+        }
+      );
+    document
+      .getElementById("jout")
+      ?.addEventListener(
+        "click",
+        logout
+      );
     document
       .getElementById("backToAuditor")
       ?.addEventListener(
@@ -3866,417 +3823,372 @@ role =
           render();
         }
       );return;
-  }
-  /* =======================================================
-     AUDITOR NAVIGATION
-     ======================================================= */
-  document
-    .querySelectorAll(".nb")
-    .forEach(button => {
-      button.addEventListener(
-        "click",
-        () => {
-          page =
-            button.dataset.p;
-          render();
-        }
-      );
-    });
-  document
-    .getElementById("out")
-    ?.addEventListener(
-      "click",
-      logout
-    );
-  /* =======================================================
-     AUDITOR JUDGE SCORE REVIEW / CORRECTION
-     ======================================================= */
-  document.querySelectorAll(".auditor-judge-score").forEach(button => {
-    button.addEventListener("click", () => {
-      const selectedJudge = button.dataset.judgeId;
-      if (!D.active) {
-        alert("There is no active performance. Activate a performance first.");
-        return;
-      }
-      if (!S()[D.active]?.[selectedJudge]) {
-        alert(`${J[selectedJudge]?.name || "This judge"} has not submitted a score for the current performance yet.`);
-        return;
-      }
-      correctionJudgeId = selectedJudge;
-      correctionPerformanceId = D.active;
-      page = "judgeCorrection";
-      render();
-    });
-  });
-  document.getElementById("saveJudgeCorrection")?.addEventListener("click", saveJudgeCorrection);
-  document.getElementById("returnAuditorCorrection")?.addEventListener("click", returnToAuditorFromCorrection);
-  document.getElementById("returnAuditorCorrection2")?.addEventListener("click", returnToAuditorFromCorrection);
-  document.querySelectorAll(".correction-score-button").forEach(button => {
-    button.addEventListener("click", () => {
-      const key = button.dataset.k;
-      document.querySelectorAll(`.correction-score-button[data-k="${key}"]`).forEach(b => b.classList.remove("selected"));
-      button.classList.add("selected");
-      const max = C.find(x => x[0] === key)?.[2] || 0;
-      const display = document.getElementById(`correction-display-${key}`);
-      if (display) display.textContent = `${Number(button.dataset.n)}/${max}`;
-      let total = 0;
-      for (const [k] of C) {
-        const selected = document.querySelector(`.correction-score-button[data-k="${k}"].selected`);
-        total += Number(selected?.dataset.n || 0);
-      }
-      const totalEl = document.getElementById("correction-total");
-      if (totalEl) totalEl.textContent = `TOTAL: ${total}/${MAX_TOTAL}`;
-    });
-  });
-  /* =======================================================
-     COMPETITION DETAILS
-     ======================================================= */
-  document
-    .getElementById("saveCompetitionDetails")
-    ?.addEventListener("click", saveCompetitionDetails);
-  /* =======================================================
-     COMPETITION TYPE
-     ======================================================= */
-  document
-    .getElementById(
-      "competitionTeam"
-    )
-    ?.addEventListener(
-      "click",
-      () =>
-        changeCompetitionType(
-          COMPETITION_TYPES.TEAM
-        )
-    );
-  document
-    .getElementById(
-      "competitionIndividual"
-    )
-    ?.addEventListener(
-      "click",
-      () =>
-        changeCompetitionType(
-          COMPETITION_TYPES.INDIVIDUAL
-        )
-    );
-  /* =======================================================
-     JUDGE COUNT
-     ======================================================= */
-  document
-    .getElementById("judges3")
-    ?.addEventListener(
-      "click",
-      () =>
-        changeJudgeCount(3)
-    );
-  document
-    .getElementById("judges5")
-    ?.addEventListener(
-      "click",
-      () =>
-        changeJudgeCount(5)
-    );
-  /* =======================================================
-     RESET
-     ======================================================= */
-  document
-    .getElementById(
-      "resetCompetition"
-    )
-    ?.addEventListener(
-      "click",
-      resetCompetition
-    );
-  /* =======================================================
-     ACTIVATE
-     ======================================================= */
-  document
-    .getElementById("activate")
-    ?.addEventListener(
-      "click",
-      async () => {
-        const select =
-          document.getElementById(
-            "act"
-          );
-        const id =
-          select?.value;
-        if (!id) {
-          alert(
-            "Select a performance first."
-          );
-          return;
-        }
-        const contestant =
-          D.contestants?.[id];
-        if (!contestant) {
-          alert(
-            "That performance does not exist."
-          );
-          return;
-        }
-        if (
-          !hasDrawNumber(
-            contestant
-          )
-        ) {
-          alert(
-            "This performance has not been assigned a draw number yet.\n\n" +
-            "Enter the number drawn on the Registration & Draw page first."
-          );
-          return;
-        }
-        const existing =
-          Object.keys(
-            S()[id] || {}
-          ).filter(
-            judgeId =>
-              activeJudges().some(
-                judge =>
-                  judge.id ===
-                  judgeId
-              )
-          ).length;
-        if (
-          existing > 0 &&
-          id !== D.active
-        ) {
-          const proceed =
-            confirm(
-              `This performance already has ${existing} judge score(s).\n\n` +
-              "Activate it anyway?"
-            );
-          if (!proceed) {
-            return;
-          }
-        }
-        try {
-          await update(
-            ref(db, "event"),
-            {
-              active: id
-            }
-          );
-          draft = {};
-          draftPerformanceId =
-            id;
-        } catch (error) {
-          alert(
-            "Could not activate performance.\n\n" +
-            error.message
-          );
-        }
-      }
-    );
-  /* =======================================================
-     ADD TEAM
-     ======================================================= */
-  document
-    .getElementById(
-      "addTeamRoster"
-    )
-    ?.addEventListener(
-      "click",
-      addTeamRoster
-    );
-  /* =======================================================
-     ADD DUET
-     ======================================================= */
-  document
-    .getElementById(
-      "addDuet"
-    )
-    ?.addEventListener(
-      "click",
-      addDuet
-    );
-  /* =======================================================
-     DUET TEAM SELECTION
-     ======================================================= */
-  const duetTeam =
-    document.getElementById(
-      "duetTeam"
-    );
-  if (duetTeam) {
-    duetTeam.addEventListener(
-      "change",
-      () => {
-        const member1 =
-          document.getElementById(
-            "duetMember1"
-          );
-        const member2 =
-          document.getElementById(
-            "duetMember2"
-          );
-        if (!member1 || !member2) {
-          return;
-        }
-        member1.innerHTML =
-          memberOptions(
-            duetTeam.value
-          );
-        member2.innerHTML =
-          memberOptions(
-            duetTeam.value
-          );
-      }
-    );
-  }
-  /* =======================================================
-     DUET MEMBER 1
-     ======================================================= */
-  document
-    .getElementById(
-      "duetMember1"
-    )
-    ?.addEventListener(
-      "change",
-      () => {
-        const member1 =
-          document.getElementById(
-            "duetMember1"
-          );
-        const member2 =
-          document.getElementById(
-            "duetMember2"
-          );
-        if (!member1 || !member2) {
-          return;
-        }
-        const selected =
-          member1.value;
-        [
-          ...member2.options
-        ].forEach(
-          option => {
-            option.disabled =
-              option.value &&
-              option.value ===
-              selected;
-          }
-        );
-        if (
-          member2.value ===
-          selected
-        ) {
-          member2.value =
-            "";
-        }
-      }
-    );
-  /* =======================================================
-     ADD INDIVIDUAL
-     ======================================================= */
-  document
-    .getElementById(
-      "addIndividual"
-    )
-    ?.addEventListener(
-      "click",
-      addIndividual
-    );
-  /* =======================================================
-     SAVE DRAW NUMBERS
-     ======================================================= */
-  document
-    .getElementById(
-      "saveDrawNumbers"
-    )
-    ?.addEventListener(
-      "click",
-      saveDrawNumbers
-    );
-  /* =======================================================
-     DELETE PERFORMANCES
-     ======================================================= */
-  document
-    .querySelectorAll(".del")
-    .forEach(button => {
-      button.addEventListener(
-        "click",
-        () =>
-          deletePerformance(
-            button.dataset.id
-          )
-      );
-    });
-  /* =======================================================
-     DELETE TEAMS
-     ======================================================= */
-  document
-    .querySelectorAll(
-      ".delete-team"
-    )
-    .forEach(button => {
-      button.addEventListener(
-        "click",
-        () =>
-          deleteTeam(
-            button.dataset.id
-          )
-      );
-    });
+  }
+  /* =======================================================
+     AUDITOR NAVIGATION
+     ======================================================= */
+  document
+    .querySelectorAll(".nb")
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          page =
+            button.dataset.p;
+          render();
+        }
+      );
+    });
+  document
+    .getElementById("out")
+    ?.addEventListener(
+      "click",
+      logout
+    );
+  /* =======================================================
+     COMPETITION TYPE
+     ======================================================= */
+  document
+    .getElementById(
+      "competitionTeam"
+    )
+    ?.addEventListener(
+      "click",
+      () =>
+        changeCompetitionType(
+          COMPETITION_TYPES.TEAM
+        )
+    );
+  document
+    .getElementById(
+      "competitionIndividual"
+    )
+    ?.addEventListener(
+      "click",
+      () =>
+        changeCompetitionType(
+          COMPETITION_TYPES.INDIVIDUAL
+        )
+    );
+  /* =======================================================
+     JUDGE COUNT
+     ======================================================= */
+  document
+    .getElementById("judges3")
+    ?.addEventListener(
+      "click",
+      () =>
+        changeJudgeCount(3)
+    );
+  document
+    .getElementById("judges5")
+    ?.addEventListener(
+      "click",
+      () =>
+        changeJudgeCount(5)
+    );
+  /* =======================================================
+     RESET
+     ======================================================= */
+  document
+    .getElementById(
+      "resetCompetition"
+    )
+    ?.addEventListener(
+      "click",
+      resetCompetition
+    );
+  /* =======================================================
+     ACTIVATE
+     ======================================================= */
+  document
+    .getElementById("activate")
+    ?.addEventListener(
+      "click",
+      async () => {
+        const select =
+          document.getElementById(
+            "act"
+          );
+        const id =
+          select?.value;
+        if (!id) {
+          alert(
+            "Select a performance first."
+          );
+          return;
+        }
+        const contestant =
+          D.contestants?.[id];
+        if (!contestant) {
+          alert(
+            "That performance does not exist."
+          );
+          return;
+        }
+        if (
+          !hasDrawNumber(
+            contestant
+          )
+        ) {
+          alert(
+            "This performance has not been assigned a draw number yet.\n\n" +
+            "Enter the number drawn on the Registration & Draw page first."
+          );
+          return;
+        }
+        const existing =
+          Object.keys(
+            S()[id] || {}
+          ).filter(
+            judgeId =>
+              activeJudges().some(
+                judge =>
+                  judge.id ===
+                  judgeId
+              )
+          ).length;
+        if (
+          existing > 0 &&
+          id !== D.active
+        ) {
+          const proceed =
+            confirm(
+              `This performance already has ${existing} judge score(s).\n\n` +
+              "Activate it anyway?"
+            );
+          if (!proceed) {
+            return;
+          }
+        }
+        try {
+          await update(
+            ref(db, "event"),
+            {
+              active: id
+            }
+          );
+          draft = {};
+          draftPerformanceId =
+            id;
+        } catch (error) {
+          alert(
+            "Could not activate performance.\n\n" +
+            error.message
+          );
+        }
+      }
+    );
+  /* =======================================================
+     ADD TEAM
+     ======================================================= */
+  document
+    .getElementById(
+      "addTeamRoster"
+    )
+    ?.addEventListener(
+      "click",
+      addTeamRoster
+    );
+  /* =======================================================
+     ADD DUET
+     ======================================================= */
+  document
+    .getElementById(
+      "addDuet"
+    )
+    ?.addEventListener(
+      "click",
+      addDuet
+    );
+  /* =======================================================
+     DUET TEAM SELECTION
+     ======================================================= */
+  const duetTeam =
+    document.getElementById(
+      "duetTeam"
+    );
+  if (duetTeam) {
+    duetTeam.addEventListener(
+      "change",
+      () => {
+        const member1 =
+          document.getElementById(
+            "duetMember1"
+          );
+        const member2 =
+          document.getElementById(
+            "duetMember2"
+          );
+        if (!member1 || !member2) {
+          return;
+        }
+        member1.innerHTML =
+          memberOptions(
+            duetTeam.value
+          );
+        member2.innerHTML =
+          memberOptions(
+            duetTeam.value
+          );
+      }
+    );
+  }
+  /* =======================================================
+     DUET MEMBER 1
+     ======================================================= */
+  document
+    .getElementById(
+      "duetMember1"
+    )
+    ?.addEventListener(
+      "change",
+      () => {
+        const member1 =
+          document.getElementById(
+            "duetMember1"
+          );
+        const member2 =
+          document.getElementById(
+            "duetMember2"
+          );
+        if (!member1 || !member2) {
+          return;
+        }
+        const selected =
+          member1.value;
+        [
+          ...member2.options
+        ].forEach(
+          option => {
+            option.disabled =
+              option.value &&
+              option.value ===
+              selected;
+          }
+        );
+        if (
+          member2.value ===
+          selected
+        ) {
+          member2.value =
+            "";
+        }
+      }
+    );
+  /* =======================================================
+     ADD INDIVIDUAL
+     ======================================================= */
+  document
+    .getElementById(
+      "addIndividual"
+    )
+    ?.addEventListener(
+      "click",
+      addIndividual
+    );
+  /* =======================================================
+     SAVE DRAW NUMBERS
+     ======================================================= */
+  document
+    .getElementById(
+      "saveDrawNumbers"
+    )
+    ?.addEventListener(
+      "click",
+      saveDrawNumbers
+    );
+  /* =======================================================
+     DELETE PERFORMANCES
+     ======================================================= */
+  document
+    .querySelectorAll(".del")
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () =>
+          deletePerformance(
+            button.dataset.id
+          )
+      );
+    });
+  /* =======================================================
+     DELETE TEAMS
+     ======================================================= */
+  document
+    .querySelectorAll(
+      ".delete-team"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () =>
+          deleteTeam(
+            button.dataset.id
+          )
+      );
+    });
 }
 /* =========================================================
-   RENDER
-   ========================================================= */
+   RENDER
+   ========================================================= */
 function render() {
-  if (
-    !D ||
-    !D.name
-  ) {
-    root.innerHTML = `
-      <div class="wrap">
-        <div class="card hero">
-          <div class="big">
-            🎤
-          </div>
-          <h2>
-            Loading Royal Karaoke SKN...
-          </h2>
-        </div>
-      </div>
-    `;
-    return;
-  }
-  /* LOGIN */
-  if (!role) {
-    root.innerHTML =
-      login();
-  }
-  /* JUDGE */
-  else if (
-    role === "judge"
-  ) {
-    root.innerHTML =
-      head() +
-      judge();
-  }
-  /* AUDITOR */
-  else {
-    if (page === "judgeCorrection") {
-      root.innerHTML = head() + auditorJudgeCorrection();
-    } else {
-      const body =
-        page === "contestants"
-          ? cont()
-          : page === "live"
-          ? live()
-          : page === "results"
-          ? results()
-          : dash();
-      root.innerHTML =
-        head() +
-        `<div class="wrap">
-          ${nav()}
-          ${body}
-        </div>`;
-    }
-  }
-  wire();
+  if (
+    !D ||
+    !D.name
+  ) {
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="card hero">
+          <div class="big">
+            🎤
+          </div>
+          <h2>
+            Loading Royal Karaoke SKN...
+          </h2>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  /* LOGIN */
+  if (!role) {
+    root.innerHTML =
+      login();
+  }
+  /* JUDGE */
+  else if (
+    role === "judge"
+  ) {
+    root.innerHTML =
+      head() +
+      judge();
+  }
+  /* AUDITOR */
+  else {
+    const body =
+      page === "contestants"
+        ? cont()
+        : page === "live"
+        ? live()
+        : page === "results"
+        ? results()
+        : dash();
+    root.innerHTML =
+      head() +
+      `<div class="wrap">
+        ${nav()}
+        ${body}
+      </div>`;
+  }
+  wire();
 }
 /* =========================================================
-   START APPLICATION
-   ========================================================= */
-start();
+   START APPLICATION
+   ========================================================= */
+start();  document.querySelectorAll(".auditor-judge-score").forEach(button=>{ button.addEventListener("click",()=>{ const selectedJudge=button.dataset.judgeId; if(!D.active){alert("There is no active performance. Activate a performance first.");return;} if(!S()[D.active]?.[selectedJudge]){alert(`${J[selectedJudge]?.name||"This judge"} has not submitted a score for the current performance yet.`);return;} correctionJudgeId=selectedJudge; correctionPerformanceId=D.active; page="judgeCorrection"; render(); }); });
+  document.getElementById("saveJudgeCorrection")?.addEventListener("click",saveJudgeCorrection);
+  document.getElementById("returnAuditorCorrection")?.addEventListener("click",returnToAuditorFromCorrection);
+  document.getElementById("returnAuditorCorrection2")?.addEventListener("click",returnToAuditorFromCorrection);
+  document.querySelectorAll(".correction-score-button").forEach(button=>{ button.addEventListener("click",()=>{ const key=button.dataset.k; document.querySelectorAll(`.correction-score-button[data-k="${key}"]`).forEach(b=>b.classList.remove("selected")); button.classList.add("selected"); const max=C.find(x=>x[0]===key)?.[2]||0; const display=document.getElementById(`correction-display-${key}`); if(display) display.textContent=`${Number(button.dataset.n)}/${max}`; let total=0; for(const [k] of C){const selected=document.querySelector(`.correction-score-button[data-k="${k}"].selected`); total+=Number(selected?.dataset.n||0);} const totalEl=document.getElementById("correction-total"); if(totalEl) totalEl.textContent=`TOTAL: ${total}/${MAX_TOTAL}`; }); });
+
