@@ -49,10 +49,24 @@ const isJudgePortal = () =>
 let D = {};
 let role =
   localStorage.getItem("rk_role") || null;
-if (isJudgePortal() && role !== "judge") role = null;
-if (!isJudgePortal() && role === "judge") role = null;
 let jid =
   localStorage.getItem("rk_judge") || null;
+
+// Always require a fresh judge login when the dedicated Judge Portal is opened.
+// This prevents a saved browser session from taking a judge straight into the console.
+if (isJudgePortal()) {
+  role = null;
+  jid = null;
+  localStorage.removeItem("rk_role");
+  localStorage.removeItem("rk_judge");
+  localStorage.removeItem("rk_competitionKey");
+} else if (role === "judge") {
+  role = null;
+  jid = null;
+  localStorage.removeItem("rk_role");
+  localStorage.removeItem("rk_judge");
+  localStorage.removeItem("rk_competitionKey");
+}
 let page = "home";
 let draft = {};
 let submitting = false;
@@ -106,33 +120,6 @@ const activeJudges = () =>
       id,
       ...judge
     }));
-
-/* =========================================================
-   COMPETITION / JUDGE SECURITY
-   ========================================================= */
-function randomJudgePassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let result = "";
-  const values = new Uint32Array(6);
-  if (window.crypto?.getRandomValues) {
-    window.crypto.getRandomValues(values);
-    for (let i = 0; i < values.length; i++) result += chars[values[i] % chars.length];
-  } else {
-    for (let i = 0; i < 6; i++) result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-function createJudgePasswords() {
-  const passwords = {};
-  Object.keys(J).forEach(id => { passwords[id] = randomJudgePassword(); });
-  return passwords;
-}
-function ensureCompetitionSecurity(event) {
-  const updates = {};
-  if (!event.competitionKey) updates["event/competitionKey"] = `comp_${Date.now()}_${randomJudgePassword()}`;
-  if (!event.judgePasswords) updates["event/judgePasswords"] = createJudgePasswords();
-  return updates;
-}
 /* =========================================================
    PERFORMANCE NUMBER
    ========================================================= */
@@ -329,8 +316,6 @@ async function initializeEvent() {
         contestants: {},
         judges: J,
         judgeCount: 5,
-        judgePasswords: createJudgePasswords(),
-        competitionKey: `comp_${Date.now()}_${randomJudgePassword()}`,
         teams: {},
         scores: {}
       }
@@ -369,7 +354,6 @@ async function initializeEvent() {
       "event/scores"
     ] = {};
   }
-  Object.assign(updates, ensureCompetitionSecurity(event));
   if (
     ![
       COMPETITION_TYPES.TEAM,
@@ -431,19 +415,6 @@ async function start() {
         D.active || null;
       D =
         snapshot.val() || {};
-      if (
-        role === "judge" &&
-        localStorage.getItem("rk_competitionKey") !== D.competitionKey
-      ) {
-        role = null;
-        jid = null;
-        draft = {};
-        submitting = false;
-        draftPerformanceId = null;
-        localStorage.removeItem("rk_role");
-        localStorage.removeItem("rk_judge");
-        localStorage.removeItem("rk_competitionKey");
-      }
       if (
         previousActive !==
         D.active
@@ -647,17 +618,6 @@ function settingsCard() {
           `
       }
       <hr>
-      <hr>
-      <p><b>🔐 Judge Passwords</b></p>
-      <p class="muted">These passwords are for the current competition only. A new password is generated when a new competition is started.</p>
-      <div class="grid">
-        ${activeJudges().map(judge => `
-          <div class="card">
-            <b>Judge ${E(judge.no)} — ${E(judge.name)}</b>
-            <h2 style="letter-spacing:2px;margin:8px 0 0 0">${E(D.judgePasswords?.[judge.id] || "NOT CREATED")}</h2>
-          </div>
-        `).join("")}
-      </div>
       <p>
         <b>
           Number of Judges
@@ -2658,9 +2618,6 @@ function logout() {
   localStorage.removeItem(
     "rk_judge"
   );
-  localStorage.removeItem(
-    "rk_competitionKey"
-  );
   page = "home";
   render();
 }
@@ -2862,15 +2819,9 @@ async function resetCompetition() {
     await update(
       ref(db, "event"),
       {
-        active: null,
-        competitionKey: `comp_${Date.now()}_${randomJudgePassword()}`,
-        judgePasswords: createJudgePasswords()
+        active: null
       }
     );
-    localStorage.removeItem("rk_judge");
-    localStorage.removeItem("rk_competitionKey");
-    jid = null;
-    if (role !== "auditor") role = null;
     draft = {};
     submitting = false;
     draftPerformanceId = null;
@@ -3714,15 +3665,6 @@ function wire() {
               );
               return;
             }
-            const password = prompt(
-              `Enter the password for ${J[selectedJudge].name} for this competition:`
-            );
-            if (password === null) return;
-            const expectedPassword = D.judgePasswords?.[selectedJudge];
-            if (!expectedPassword || password.trim().toUpperCase() !== expectedPassword) {
-              alert("Incorrect judge password. Access denied.");
-              return;
-            }
             judgeFromAuditor = false;
 role =
               "judge";
@@ -3735,10 +3677,6 @@ role =
             localStorage.setItem(
               "rk_judge",
               jid
-            );
-            localStorage.setItem(
-              "rk_competitionKey",
-              D.competitionKey || ""
             );
             draft = {};
             draftPerformanceId =
