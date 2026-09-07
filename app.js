@@ -108,7 +108,7 @@ const activeJudges = () =>
     }));
 
 /* =========================================================
-   JUDGE COMPETITION PASSWORDS
+   COMPETITION / JUDGE SECURITY
    ========================================================= */
 function randomJudgePassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -329,8 +329,8 @@ async function initializeEvent() {
         contestants: {},
         judges: J,
         judgeCount: 5,
-        competitionKey: `comp_${Date.now()}_${randomJudgePassword()}`,
         judgePasswords: createJudgePasswords(),
+        competitionKey: `comp_${Date.now()}_${randomJudgePassword()}`,
         teams: {},
         scores: {}
       }
@@ -339,7 +339,7 @@ async function initializeEvent() {
   }
   const event =
     snap.val() || {};
-  const updates = ensureCompetitionSecurity(event);
+  const updates = {};
   if (
     !VALID_JUDGE_COUNTS.includes(
       Number(event.judgeCount)
@@ -369,6 +369,7 @@ async function initializeEvent() {
       "event/scores"
     ] = {};
   }
+  Object.assign(updates, ensureCompetitionSecurity(event));
   if (
     ![
       COMPETITION_TYPES.TEAM,
@@ -442,7 +443,6 @@ async function start() {
         localStorage.removeItem("rk_role");
         localStorage.removeItem("rk_judge");
         localStorage.removeItem("rk_competitionKey");
-        page = "home";
       }
       if (
         previousActive !==
@@ -546,7 +546,6 @@ function login() {
           <p class="muted">Judges should use the dedicated Judge Portal URL.</p>
         `}
         ${isJudgePortal() ? `
-          <p class="muted"><b>Password required:</b> Select your assigned judge and enter the password issued for this competition.</p>
           <h3>
             Select Judge
           </h3>
@@ -593,17 +592,6 @@ function settingsCard() {
         <br>
         <button id="saveCompetitionDetails" class="primary" type="button">SAVE COMPETITION DETAILS</button>
         <p class="muted">You can change the competition name, venue and date here without editing the code.</p>
-        <hr>
-        <p><b>🔐 Judge Passwords</b></p>
-        <p class="muted">Each judge has a unique password for this competition. Passwords automatically change when you start a new competition.</p>
-        <div class="card" style="margin:10px 0;padding:12px">
-          ${activeJudges().map(judge => `
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #ddd">
-              <b>${E(judge.name)}</b>
-              <code style="font-size:1.15em;letter-spacing:2px">${E(D.judgePasswords?.[judge.id] || "NOT SET")}</code>
-            </div>
-          `).join("")}
-        </div>
         <hr>
         <p>
           <b>
@@ -659,6 +647,17 @@ function settingsCard() {
           `
       }
       <hr>
+      <hr>
+      <p><b>🔐 Judge Passwords</b></p>
+      <p class="muted">These passwords are for the current competition only. A new password is generated when a new competition is started.</p>
+      <div class="grid">
+        ${activeJudges().map(judge => `
+          <div class="card">
+            <b>Judge ${E(judge.no)} — ${E(judge.name)}</b>
+            <h2 style="letter-spacing:2px;margin:8px 0 0 0">${E(D.judgePasswords?.[judge.id] || "NOT CREATED")}</h2>
+          </div>
+        `).join("")}
+      </div>
       <p>
         <b>
           Number of Judges
