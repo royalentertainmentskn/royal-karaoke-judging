@@ -49,24 +49,10 @@ const isJudgePortal = () =>
 let D = {};
 let role =
   localStorage.getItem("rk_role") || null;
+if (isJudgePortal() && role !== "judge") role = null;
+if (!isJudgePortal() && role === "judge") role = null;
 let jid =
   localStorage.getItem("rk_judge") || null;
-
-// Always require a fresh judge login when the dedicated Judge Portal is opened.
-// This prevents a saved browser session from taking a judge straight into the console.
-if (isJudgePortal()) {
-  role = null;
-  jid = null;
-  localStorage.removeItem("rk_role");
-  localStorage.removeItem("rk_judge");
-  localStorage.removeItem("rk_competitionKey");
-} else if (role === "judge") {
-  role = null;
-  jid = null;
-  localStorage.removeItem("rk_role");
-  localStorage.removeItem("rk_judge");
-  localStorage.removeItem("rk_competitionKey");
-}
 let page = "home";
 let draft = {};
 let submitting = false;
@@ -1808,6 +1794,158 @@ function performanceResult(id) {
   };
 }
 /* =========================================================
+   VERSION 1.1 — PRINT / SAVE RESULTS
+   ========================================================= */
+function csvCell(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function saveResults() {
+  const rows = cs().map(x => {
+    const result = performanceResult(x.id);
+    return {
+      ...x,
+      submitted: result.submitted,
+      complete: result.complete,
+      avg: result.avg
+    };
+  });
+
+  const ranked = rows.slice().sort((a, b) => b.avg - a.avg);
+  const teamTotals = {};
+
+  rows.filter(x => x.complete).forEach(x => {
+    const team = getContestantTeam(x);
+    if (!team) return;
+    if (!teamTotals[team]) {
+      teamTotals[team] = { team, total: 0, performances: 0 };
+    }
+    teamTotals[team].total += Number(x.avg || 0);
+    teamTotals[team].performances++;
+  });
+
+  const teamRanking = Object.values(teamTotals)
+    .sort((a, b) => b.total - a.total);
+
+  const lines = [];
+  lines.push([
+    "ROYAL KARAOKE SKN — COMPETITION RESULTS",
+    "",
+    "",
+    ""
+  ].map(csvCell).join(","));
+  lines.push([
+    "Competition", D.name || "",
+    "Venue", D.venue || ""
+  ].map(csvCell).join(","));
+  lines.push([
+    "Date", D.date || "",
+    "Judges", judgeCount()
+  ].map(csvCell).join(","));
+  lines.push("");
+  lines.push(["PERFORMANCE RESULTS"].map(csvCell).join(","));
+  lines.push([
+    "Rank","Performance #","Contestant","Partner","Category","Team","Judges Submitted","Final Score","Status"
+  ].map(csvCell).join(","));
+
+  ranked.forEach((x, index) => {
+    lines.push([
+      x.complete ? index + 1 : "",
+      hasDrawNumber(x) ? x.number : "",
+      x.name || "",
+      x.category === "Duet" ? (x.name2 || "") : "",
+      x.category || "",
+      getContestantTeam(x) || "Unassigned",
+      `${x.submitted}/${judgeCount()}`,
+      x.complete ? Number(x.avg).toFixed(2) : "",
+      x.complete ? "COMPLETE" : "PENDING"
+    ].map(csvCell).join(","));
+  });
+
+  if (isTeamMode()) {
+    lines.push("");
+    lines.push(["TEAM RANKING"].map(csvCell).join(","));
+    lines.push([
+      "Rank","Team","Completed Performances","Team Total"
+    ].map(csvCell).join(","));
+    teamRanking.forEach((team, index) => {
+      lines.push([
+        index + 1,
+        team.team,
+        team.performances,
+        Number(team.total).toFixed(2)
+      ].map(csvCell).join(","));
+    });
+  }
+
+  lines.push("");
+  lines.push(["Exported", new Date().toLocaleString()].map(csvCell).join(","));
+
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {
+    type: "text/csv;charset=utf-8;"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeName = String(D.name || "Royal_Karaoke_SKN")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "") || "Royal_Karaoke_SKN";
+  link.href = url;
+  link.download = `${safeName}_Results.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function printResults() {
+  const printWindow = window.open("", "_blank", "width=1200,height=900");
+  if (!printWindow) {
+    alert("Please allow pop-ups for this site so the results can be printed.");
+    return;
+  }
+
+  const content = results();
+  printWindow.document.open();
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Royal Karaoke SKN — Competition Results</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 24px; color: #111; background: #fff; }
+          h1, h2, h3 { margin-top: 0.7em; }
+          .card { border: 1px solid #999; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #777; padding: 7px; text-align: left; }
+          th { background: #eee; }
+          .big { font-size: 2em; font-weight: bold; }
+          .muted { color: #555; }
+          .winner { text-align: center; }
+          .results-actions { display: none !important; }
+          @media print {
+            body { margin: 10mm; }
+            .card { break-inside: avoid; }
+            .grid { grid-template-columns: repeat(2, 1fr); }
+          }
+          @media (max-width: 800px) {
+            .grid { grid-template-columns: 1fr; }
+          }
+        </style>
+      </head>
+      <body>
+        ${content}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 400);
+}
+
+/* =========================================================
    RESULTS
    ========================================================= */
 function teamResultDetails() {
@@ -2094,6 +2232,10 @@ function results() {
     <h1>
       Competition Results
     </h1>
+    <div class="results-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px 0">
+      <button id="printResults" class="primary" type="button">🖨️ PRINT RESULTS</button>
+      <button id="saveResults" type="button">💾 SAVE RESULTS (CSV)</button>
+    </div>
     <div class="card">
       <h2>
         ${E(
@@ -3901,6 +4043,21 @@ role =
     ?.addEventListener(
       "click",
       logout
+    );
+  /* =======================================================
+     VERSION 1.1 — RESULTS ACTIONS
+     ======================================================= */
+  document
+    .getElementById("printResults")
+    ?.addEventListener(
+      "click",
+      printResults
+    );
+  document
+    .getElementById("saveResults")
+    ?.addEventListener(
+      "click",
+      saveResults
     );
   /* =======================================================
      AUDITOR JUDGE SCORE REVIEW / CORRECTION
