@@ -46,9 +46,13 @@ const root = document.getElementById("app");
 const isJudgePortal = () =>
   new URLSearchParams(window.location.search).get("judge") === "1" ||
   window.location.hash === "#judge";
+const isLiveDisplay = () =>
+  new URLSearchParams(window.location.search).get("display") === "1" ||
+  window.location.hash === "#display";
 let D = {};
 let role =
   localStorage.getItem("rk_role") || null;
+if (isLiveDisplay()) role = null;
 if (isJudgePortal() && role !== "judge") role = null;
 if (!isJudgePortal() && role === "judge") role = null;
 let jid =
@@ -1641,6 +1645,152 @@ function cont() {
     ${registeredPerformances()}
   `;
 }
+/* =========================================================
+   VERSION 1.3 — LIVE COMPETITION DISPLAY
+   Public display only. Never shows judge scores.
+   ========================================================= */
+function liveDisplay() {
+  const list = cs();
+  const active = A();
+  const activeIndex = active
+    ? list.findIndex(x => x.id === D.active)
+    : -1;
+  const next = activeIndex >= 0
+    ? list.slice(activeIndex + 1).find(hasDrawNumber) || null
+    : list.find(hasDrawNumber) || null;
+
+  const activeScores = active
+    ? S()[D.active] || {}
+    : {};
+  const submitted = active
+    ? activeJudges().filter(judge => activeScores[judge.id]?.submitted === true).length
+    : 0;
+  const complete = active && submitted === judgeCount();
+
+  const performerName = x =>
+    x?.category === "Duet" && x?.name2
+      ? `${x.name} & ${x.name2}`
+      : (x?.name || "");
+
+  const statusText = !active
+    ? "WAITING FOR PERFORMANCE"
+    : complete
+    ? "JUDGING COMPLETE"
+    : "PERFORMANCE IN PROGRESS";
+
+  return `
+    <style>
+      .live-display {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 34px;
+        box-sizing: border-box;
+        background: linear-gradient(135deg, #10131a, #1d2330);
+        color: #fff;
+      }
+      .live-display .brand {
+        font-size: clamp(1rem, 2vw, 1.5rem);
+        letter-spacing: .16em;
+        opacity: .78;
+        margin-bottom: 18px;
+      }
+      .live-display .title {
+        font-size: clamp(2rem, 5vw, 4rem);
+        margin: 0 0 30px;
+      }
+      .live-display .status {
+        display: inline-block;
+        padding: 12px 24px;
+        border-radius: 999px;
+        font-weight: 800;
+        letter-spacing: .08em;
+        background: rgba(255,255,255,.12);
+        margin-bottom: 26px;
+      }
+      .live-display .performer-card {
+        width: min(1100px, 94vw);
+        padding: clamp(28px, 5vw, 58px);
+        border-radius: 24px;
+        background: rgba(255,255,255,.08);
+        box-shadow: 0 20px 60px rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.12);
+      }
+      .live-display .eyebrow {
+        font-size: clamp(1rem, 2vw, 1.35rem);
+        opacity: .72;
+        letter-spacing: .12em;
+      }
+      .live-display .number {
+        font-size: clamp(4rem, 12vw, 9rem);
+        line-height: .95;
+        font-weight: 900;
+        margin: 12px 0 18px;
+      }
+      .live-display .name {
+        font-size: clamp(2rem, 6vw, 5rem);
+        font-weight: 900;
+        line-height: 1.05;
+        margin: 0;
+      }
+      .live-display .details {
+        font-size: clamp(1.05rem, 2.4vw, 1.7rem);
+        margin-top: 22px;
+        opacity: .86;
+      }
+      .live-display .next {
+        margin-top: 30px;
+        font-size: clamp(1rem, 2vw, 1.35rem);
+        opacity: .78;
+      }
+      .live-display .next strong {
+        color: #fff;
+      }
+      .live-display .footer {
+        margin-top: 28px;
+        font-size: .9rem;
+        opacity: .5;
+      }
+    </style>
+    <div class="live-display">
+      <div class="brand">🎤 ROYAL KARAOKE SKN</div>
+      <h1 class="title">LIVE COMPETITION</h1>
+      <div class="status">${E(statusText)}</div>
+      <div class="performer-card">
+        ${active ? `
+          <div class="eyebrow">NOW PERFORMING</div>
+          <div class="number">#${E(active.number)}</div>
+          <h2 class="name">${E(performerName(active))}</h2>
+          <div class="details">
+            ${E(active.category || "Performance")}
+            ${active.song ? ` · ${E(active.song)}` : ""}
+            ${getContestantTeam(active) ? ` · ${E(getContestantTeam(active))}` : ""}
+          </div>
+          <div class="next">
+            ${complete
+              ? "All judges have submitted. Awaiting the next performance."
+              : `Judging in progress · ${submitted} of ${judgeCount()} judges submitted`
+            }
+          </div>
+        ` : `
+          <div class="eyebrow">GET READY</div>
+          <h2 class="name">The competition will begin shortly</h2>
+          <div class="details">Please wait for the Auditor to activate the next performance.</div>
+        `}
+      </div>
+      ${next ? `
+        <div class="next">
+          NEXT UP: <strong>#${E(next.number)} — ${E(performerName(next))}</strong>
+        </div>
+      ` : ""}
+      <div class="footer">Scores are private and are not displayed on this screen.</div>
+    </div>
+  `;
+}
+
 /* =========================================================
    LIVE SCORES
    ========================================================= */
@@ -4409,6 +4559,11 @@ function render() {
         </div>
       </div>
     `;
+    return;
+  }
+  /* VERSION 1.3 — PUBLIC LIVE DISPLAY */
+  if (isLiveDisplay()) {
+    root.innerHTML = liveDisplay();
     return;
   }
   /* LOGIN */
