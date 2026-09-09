@@ -47,6 +47,12 @@ function criteriaTotal(list = C) {
   return list.reduce((total, item) => total + Number(item[2] || 0), 0);
 }
 function criteriaForPerformance(performance) {
+  // The active performance always uses the criteria snapshot published
+  // by the Auditor at activation time. This is the source of truth for
+  // every Judge tablet currently scoring that performance.
+  if (performance && D.active && performance.id === D.active && D.activeCriteria) {
+    return normalizeCriteria(D.activeCriteria);
+  }
   return normalizeCriteria(performance?.criteria || D.criteria || C);
 }
 function draftTotalForCriteria(list, source = draft) {
@@ -210,8 +216,8 @@ const S = () =>
    ACTIVE PERFORMANCE
    ========================================================= */
 const A = () =>
-  D.active
-    ? D.contestants?.[D.active]
+  D.active && D.contestants?.[D.active]
+    ? { id: D.active, ...D.contestants[D.active] }
     : null;
 /* =========================================================
    CURRENT DRAFT TOTAL
@@ -339,6 +345,7 @@ async function initializeEvent() {
         teams: {},
         scores: {},
         criteria: DEFAULT_CRITERIA.map(x => [...x]),
+        activeCriteria: DEFAULT_CRITERIA.map(x => [...x]),
         bonusPoints: 0
       }
     );
@@ -380,6 +387,11 @@ async function initializeEvent() {
     updates[
       "event/criteria"
     ] = DEFAULT_CRITERIA.map(x => [...x]);
+  }
+  if (!event.activeCriteria) {
+    updates[
+      "event/activeCriteria"
+    ] = normalizeCriteria(event.criteria || DEFAULT_CRITERIA);
   }
   if (event.bonusPoints === undefined || event.bonusPoints === null || !Number.isFinite(Number(event.bonusPoints))) {
     updates[
@@ -2231,6 +2243,10 @@ function individualResults() {
   const winnerCard = winner ? `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>${E(winner.name)}</h2><p>${E(winner.contestantId)} · ${E(winner.gender)}</p><div class="big">${winner.finalScore.toFixed(2)}</div><p>/${maxFinal} final score${winner.bonus ? ` · includes +${winner.bonus} bonus` : ""}</p></div>` : `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>—</h2><p>No contestant has two completed rounds yet.</p></div>`;
   return `
     <h1>Individual Competition Results — 2 Rounds</h1>
+    <div class="results-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px 0">
+      <button id="printResults" class="primary" type="button">🖨️ PRINT RESULTS</button>
+      <button id="saveResults" type="button">💾 SAVE RESULTS (CSV)</button>
+    </div>
     <div class="grid">${winnerCard}<div class="card"><span class="muted">COMPLETED CONTESTANTS</span><div class="stat">${ranked.length}/${rows.length}</div><p>Both rounds completed</p></div></div>
     <div class="card table-wrap"><h2>Final Individual Ranking</h2><p class="muted">Each round is scored independently. The two round scores are averaged, then the early-registration bonus (if awarded) is added once. Judging is out of 100; final score can be up to ${maxFinal} with a +${bonusPoints()} bonus.</p><table><tr><th>Rank</th><th>Contestant</th><th>ID</th><th>Gender</th><th>Round 1</th><th>Round 2</th><th>Bonus</th><th>Final Score</th><th>Status</th></tr>${rows.sort((a,b) => (b.complete-a.complete) || (b.finalScore-a.finalScore)).map(x => `<tr><td>${x.complete ? ranked.findIndex(r => r.id === x.id)+1 : "—"}</td><td><strong>${E(x.name)}</strong></td><td>${E(x.contestantId)}</td><td>${E(x.gender)}</td><td>${x.r1?.result.complete ? x.r1.result.avg.toFixed(2) : "—"}</td><td>${x.r2?.result.complete ? x.r2.result.avg.toFixed(2) : "—"}</td><td>${x.bonus ? `+${x.bonus}` : "—"}</td><td><strong>${x.complete ? x.finalScore.toFixed(2) : "—"}</strong> /${maxFinal}</td><td>${x.complete ? '<span class="ok">COMPLETE</span>' : '<span class="warn">PENDING</span>'}</td></tr>`).join("")}</table></div>
   `;
@@ -2757,7 +2773,7 @@ async function saveJudgeCorrection() {
   const corrected={...current, criteria};
   for (const [key,label] of criteria) { const selected=document.querySelector(`.correction-score-button[data-k="${key}"].selected`); if (!selected) { alert(`Please select a score for ${label}.`); return; } corrected[key]=Number(selected.dataset.n); }
   corrected.total=criteria.reduce((sum,[key])=>sum+Number(corrected[key]||0),0); corrected.corrected=true; corrected.correctedAt=Date.now(); corrected.correctedBy="Auditor";
-  try { await set(ref(db,`event/scores/${performanceId}/${judgeId}`),corrected); alert(`${J[judgeId].name}'s corrected score has been saved: ${corrected.total}/${MAX_TOTAL}.`); returnToAuditorFromCorrection(); } catch(error) { console.error("Judge score correction error:",error); alert("The corrected score could not be saved.\n\n"+error.message); }
+  try { await set(ref(db,`event/scores/${performanceId}/${judgeId}`),corrected); alert(`${J[judgeId].name}'s corrected score has been saved: ${corrected.total}/${criteriaTotal(criteria)}.`); returnToAuditorFromCorrection(); } catch(error) { console.error("Judge score correction error:",error); alert("The corrected score could not be saved.\n\n"+error.message); }
 }
 
 function judge() {
@@ -4374,6 +4390,8 @@ role =
             {
               [`event/contestants/${id}/criteria`]: activationCriteria,
               [`event/contestants/${id}/criteriaVersion`]: criteriaVersion,
+              [`event/activeCriteria`]: activationCriteria,
+              [`event/activeCriteriaVersion`]: criteriaVersion,
               [`event/active`]: id
             }
           );
