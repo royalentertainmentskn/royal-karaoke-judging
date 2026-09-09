@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.4c";
+const APP_VERSION = "1.4d";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -47,13 +47,27 @@ function criteriaTotal(list = C) {
   return list.reduce((total, item) => total + Number(item[2] || 0), 0);
 }
 function criteriaForPerformance(performance) {
-  // The active performance always uses the criteria snapshot published
-  // by the Auditor at activation time. This is the source of truth for
-  // every Judge tablet currently scoring that performance.
+  /*
+    SOURCE OF TRUTH:
+    The criteria saved directly inside the performance record at the
+    moment the Auditor activates it are the criteria the Judges must use.
+    Do NOT let the global event/activeCriteria value override the
+    performance snapshot. This prevents an old global criteria set from
+    appearing on Judge tablets.
+  */
+  if (performance?.criteria) {
+    return normalizeCriteria(performance.criteria);
+  }
+
+  /*
+    Backward compatibility for a performance that was activated before
+    criteria snapshots were added.
+  */
   if (performance && D.active && performance.id === D.active && D.activeCriteria) {
     return normalizeCriteria(D.activeCriteria);
   }
-  return normalizeCriteria(performance?.criteria || D.criteria || C);
+
+  return normalizeCriteria(D.criteria || C);
 }
 function draftTotalForCriteria(list, source = draft) {
   return list.reduce((total, [key]) => total + (Number(source[key]) || 0), 0);
@@ -2915,6 +2929,10 @@ function judge() {
               : ""
           }
         </p>
+        <p class="muted" style="margin-top:8px">
+          Judging criteria: <strong>${E(a.criteriaVersion || D.activeCriteriaVersion || "current")}</strong>
+          · ${activeCriteria.length} segments · ${activeMaxTotal} points
+        </p>
       </div>
       <div class="card">
         <div class="notice">
@@ -4390,6 +4408,7 @@ role =
             {
               [`event/contestants/${id}/criteria`]: activationCriteria,
               [`event/contestants/${id}/criteriaVersion`]: criteriaVersion,
+              [`event/contestants/${id}/criteriaAppVersion`]: APP_VERSION,
               [`event/activeCriteria`]: activationCriteria,
               [`event/activeCriteriaVersion`]: criteriaVersion,
               [`event/active`]: id
