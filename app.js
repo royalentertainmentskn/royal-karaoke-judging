@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.4d";
+const APP_VERSION = "1.5";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -47,27 +47,13 @@ function criteriaTotal(list = C) {
   return list.reduce((total, item) => total + Number(item[2] || 0), 0);
 }
 function criteriaForPerformance(performance) {
-  /*
-    SOURCE OF TRUTH:
-    The criteria saved directly inside the performance record at the
-    moment the Auditor activates it are the criteria the Judges must use.
-    Do NOT let the global event/activeCriteria value override the
-    performance snapshot. This prevents an old global criteria set from
-    appearing on Judge tablets.
-  */
-  if (performance?.criteria) {
-    return normalizeCriteria(performance.criteria);
-  }
-
-  /*
-    Backward compatibility for a performance that was activated before
-    criteria snapshots were added.
-  */
+  // The active performance always uses the criteria snapshot published
+  // by the Auditor at activation time. This is the source of truth for
+  // every Judge tablet currently scoring that performance.
   if (performance && D.active && performance.id === D.active && D.activeCriteria) {
     return normalizeCriteria(D.activeCriteria);
   }
-
-  return normalizeCriteria(D.criteria || C);
+  return normalizeCriteria(performance?.criteria || D.criteria || C);
 }
 function draftTotalForCriteria(list, source = draft) {
   return list.reduce((total, [key]) => total + (Number(source[key]) || 0), 0);
@@ -81,6 +67,17 @@ function performanceBonus(performance) {
 }
 function performanceFinalScore(performance, result) {
   return Number(result?.avg || 0) + performanceBonus(performance);
+}
+async function hashJudgePassword(password) {
+  const data = new TextEncoder().encode(String(password));
+  const buffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function judgePasswordHash(judgeId) {
+  return D.judgePasswords?.[judgeId]?.hash || D.judgePasswords?.[judgeId] || "";
+}
+function judgePasswordSet(judgeId) {
+  return !!judgePasswordHash(judgeId);
 }
 const J = {
   j1: { no: 1, name: "Judge 1" },
@@ -108,10 +105,19 @@ let D = {};
 let role =
   localStorage.getItem("rk_role") || null;
 if (isLiveDisplay()) role = null;
-if (isJudgePortal() && role !== "judge") role = null;
-if (!isJudgePortal() && role === "judge") role = null;
-let jid =
-  localStorage.getItem("rk_judge") || null;
+// The dedicated Judge Portal always starts at its login screen.
+// Judge authentication is kept in sessionStorage so a refresh in the same
+// tab can continue, but a different tablet/tab must authenticate separately.
+const judgeSession = (() => {
+  try { return sessionStorage.getItem("rk_judge_auth") === "1"; } catch (_) { return false; }
+})();
+if (isJudgePortal()) {
+  role = judgeSession ? "judge" : null;
+} else if (role === "judge") {
+  role = null;
+}
+let jid = judgeSession ? (sessionStorage.getItem("rk_judge") || null) : null;
+let selectedLoginJudge = null;
 let page = "home";
 let draft = {};
 let submitting = false;
@@ -360,7 +366,8 @@ async function initializeEvent() {
         scores: {},
         criteria: DEFAULT_CRITERIA.map(x => [...x]),
         activeCriteria: DEFAULT_CRITERIA.map(x => [...x]),
-        bonusPoints: 0
+        bonusPoints: 0,
+        judgePasswords: {}
       }
     );
     return;
@@ -381,6 +388,11 @@ async function initializeEvent() {
     updates[
       "event/judges"
     ] = J;
+  }
+  if (!event.judgePasswords) {
+    updates[
+      "event/judgePasswords"
+    ] = {};
   }
   if (!event.teams) {
     updates[
@@ -538,66 +550,75 @@ function head() {
    LOGIN
    ========================================================= */
 function login() {
-  const availableJudges =
-    activeJudges();
+  const availableJudges = activeJudges();
+  if (!isJudgePortal()) {
+    return `
+      <div class="wrap">
+        <div class="card hero">
+          <div class="big">🎤</div>
+          <h1>Royal Karaoke SKN</h1>
+          <h2>100-Point Digital Judging System</h2>
+          <p class="muted">${E(competitionTypeLabel())}</p>
+          <p class="muted">Current competition: <b>${judgeCount()} Judges</b></p>
+          <button id="aud" class="primary" type="button">AUDITOR LOGIN</button>
+          <p class="muted">Judges should use the dedicated Judge Portal URL.</p>
+        </div>
+      </div>
+    `;
+  }
+  const selected = selectedLoginJudge ? J[selectedLoginJudge] : null;
+  const selectedSet = selected ? judgePasswordSet(selectedLoginJudge) : false;
   return `
     <div class="wrap">
       <div class="card hero">
-        <div class="big">
-          🎤
+        <div class="big">🎤</div>
+        <h1>Royal Karaoke SKN</h1>
+        <h2>Judge Login</h2>
+        <p class="muted">${E(competitionTypeLabel())} · ${judgeCount()} Judges</p>
+        <h3>Select Your Assigned Judge</h3>
+        <div class="login-grid">
+          ${availableJudges.map(judge => `
+            <button class="jl ${selectedLoginJudge === judge.id ? "primary" : ""}" data-id="${E(judge.id)}" type="button">
+              ${E(judge.name)}
+            </button>
+          `).join("")}
         </div>
-        <h1>
-          Royal Karaoke SKN
-        </h1>
-        <h2>
-          100-Point Digital Judging System
-        </h2>
-        <p class="muted">
-          ${E(
-            competitionTypeLabel()
-          )}
-        </p>
-        <p class="muted">
-          Current competition:
-          <b>
-            ${judgeCount()} Judges
-          </b>
-        </p>
-                ${isJudgePortal() ? `
-          <h3>Judge Access</h3>
-          <p class="muted">This is the dedicated Judge Portal. Select your assigned judge below.</p>
-        ` : `
-          <button
-            id="aud"
-            class="primary"
-            type="button"
-          >
-            AUDITOR LOGIN
-          </button>
-          <p class="muted">Judges should use the dedicated Judge Portal URL.</p>
-        `}
-        ${isJudgePortal() ? `
-          <h3>
-            Select Judge
-          </h3>
-          <div class="login-grid">
-            ${availableJudges
-              .map(
-                judge => `
-                  <button
-                    class="jl"
-                    data-id="${E(judge.id)}"
-                    type="button"
-                  >
-                    ${E(judge.name)}
-                  </button>
-                `
-              )
-              .join("")}
+        ${selected ? `
+          <div class="card" style="margin-top:18px;text-align:left">
+            <h3>${E(selected.name)} Password</h3>
+            <p class="muted">Enter the password created by the Auditor for this Judge.</p>
+            ${selectedSet ? `<input id="judgeLoginPassword" type="password" autocomplete="current-password" placeholder="Enter password" style="width:100%;box-sizing:border-box">\n              <br><br><button id="judgeLogin" class="primary" type="button" style="width:100%">LOGIN AS ${E(selected.name).toUpperCase()}</button>` : `<p class="warn">A password has not been created for this Judge yet. Please ask the Auditor to set it.</p>`}
+            <p id="judgeLoginStatus" class="muted"></p>
           </div>
-        ` : ""}
+        ` : `<p class="muted">Select your assigned Judge number above.</p>`}
       </div>
     </div>
+  `;
+}
+/* =========================================================
+   COMPETITION SETTINGS
+   ========================================================= */
+function judgePasswordSettings() {
+  const enabled = activeJudges();
+  return `
+    <hr>
+    <h3>🔐 Judge Login Passwords</h3>
+    <p class="muted">Create or change the password for each enabled Judge. Judges will use the dedicated Judge Login page, select their assigned number, then enter the password. Passwords are stored as one-way hashes; the Auditor cannot view an existing password.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Judge</th><th>Status</th><th>New / Change Password</th></tr>
+        ${enabled.map(judge => `
+          <tr>
+            <td><strong>${E(judge.name)}</strong></td>
+            <td>${judgePasswordSet(judge.id) ? '<span class="ok">✓ Password Set</span>' : '<span class="warn">Not Set</span>'}</td>
+            <td><input class="judge-password-input" data-id="${E(judge.id)}" type="password" autocomplete="new-password" placeholder="${judgePasswordSet(judge.id) ? 'Enter new password' : 'Create password'}" minlength="4" maxlength="50"></td>
+          </tr>
+        `).join("")}
+      </table>
+    </div>
+    <br>
+    <button id="saveJudgePasswords" class="primary" type="button">SAVE JUDGE PASSWORDS</button>
+    <p class="muted">Use at least 4 characters. Leave a field blank if you do not want to change that Judge's existing password.</p>
   `;
 }
 /* =========================================================
@@ -632,6 +653,7 @@ function settingsCard() {
         <button id="judges5" type="button" class="${judgeCount() === 5 ? "primary" : ""}">5 JUDGES</button>
       </div>
       <p>Current setting: <strong>${judgeCount()} Judges</strong></p>
+      ${judgePasswordSettings()}
       <hr>
       <h3>🎁 Early Registration Bonus Points</h3>
       <p class="muted">Set the bonus once for this competition. During registration, tick the <strong>Early Registration Bonus</strong> box for each contestant/member who should receive it. The bonus is awarded once per contestant, not once per song or judge.</p>
@@ -724,6 +746,41 @@ async function saveCriteria() {
     alert(`Judging criteria saved successfully. ${C.length} segments, ${MAX_TOTAL} points total.`);
     render();
   } catch (error) { alert("The judging criteria could not be saved.\n\n" + error.message); }
+}
+async function saveJudgePasswords() {
+  const inputs = [...document.querySelectorAll(".judge-password-input")];
+  const updates = {};
+  let changed = 0;
+  for (const input of inputs) {
+    const judgeId = input.dataset.id;
+    const password = input.value;
+    if (!password) continue;
+    if (password.length < 4) {
+      alert(`${J[judgeId]?.name || "Judge"} password must be at least 4 characters.`);
+      return;
+    }
+    if (password.length > 50) {
+      alert(`${J[judgeId]?.name || "Judge"} password must be 50 characters or fewer.`);
+      return;
+    }
+    updates[`event/judgePasswords/${judgeId}`] = {
+      hash: await hashJudgePassword(password),
+      updatedAt: Date.now()
+    };
+    changed++;
+  }
+  if (!changed) {
+    alert("No new passwords were entered.");
+    return;
+  }
+  try {
+    await update(ref(db), updates);
+    alert(`${changed} Judge password${changed === 1 ? " has" : "s have"} been saved successfully.`);
+    render();
+  } catch (error) {
+    console.error("Judge password error:", error);
+    alert("The Judge passwords could not be saved.\n\n" + error.message);
+  }
 }
 async function saveBonusPoints() {
   if (criteriaLocked()) { alert("The early-registration bonus is locked after registration or scoring starts. Start a new competition first."); return; }
@@ -1710,6 +1767,51 @@ function cont() {
   `;
 }
 /* =========================================================
+   LIVE DISPLAY — ANONYMOUS STANDINGS
+   ========================================================= */
+function completedPerformanceCount() {
+  return cs().filter(x => performanceResult(x.id).complete).length;
+}
+function liveStandings() {
+  const completed = cs().filter(x => performanceResult(x.id).complete);
+  if (!completed.length) return [];
+  if (isTeamMode()) {
+    const groups = {};
+    completed.forEach(x => {
+      const team = getContestantTeam(x) || "__UNASSIGNED__";
+      if (!groups[team]) groups[team] = { count: 0, total: 0 };
+      const result = performanceResult(x.id);
+      groups[team].count++;
+      groups[team].total += performanceFinalScore(x, result);
+    });
+    return Object.values(groups)
+      .filter(x => x.count > 0)
+      .map(x => ({ score: x.total / x.count, count: x.count }))
+      .sort((a, b) => b.score - a.score);
+  }
+  const groups = {};
+  completed.forEach(x => {
+    const gid = x.individualGroupId || x.contestantId || x.id;
+    if (!groups[gid]) groups[gid] = { scores: [], bonusEligible: false };
+    const result = performanceResult(x.id);
+    groups[gid].scores.push(Number(result.avg || 0));
+    groups[gid].bonusEligible = groups[gid].bonusEligible || x.bonusEligible === true;
+  });
+  return Object.values(groups)
+    .filter(x => x.scores.length)
+    .map(x => ({ score: (x.scores.reduce((a, b) => a + b, 0) / x.scores.length) + (x.scores.length >= 2 && x.bonusEligible ? bonusPoints() : 0), count: x.scores.length }))
+    .sort((a, b) => b.score - a.score);
+}
+function shouldShowLiveStandings(active, complete) {
+  const completedCount = completedPerformanceCount();
+  if (completedCount < 2 || completedCount % 2 !== 0) return false;
+  // Show the standings between performances, or immediately after an even-numbered
+  // performance is fully judged. Once the next performance is activated, return to the
+  // normal performer display.
+  return !active || complete;
+}
+
+/* =========================================================
    VERSION 1.4b — LIVE COMPETITION DISPLAY
    Public display only. Never shows judge scores.
    ========================================================= */
@@ -1730,6 +1832,9 @@ function liveDisplay() {
     ? activeJudges().filter(judge => activeScores[judge.id]?.submitted === true).length
     : 0;
   const complete = active && submitted === judgeCount();
+  const completedCount = completedPerformanceCount();
+  const standings = liveStandings();
+  const showStandings = shouldShowLiveStandings(active, complete);
 
   const performerName = x =>
     x?.category === "Duet" && x?.name2
@@ -1818,11 +1923,39 @@ function liveDisplay() {
         font-size: .9rem;
         opacity: .5;
       }
+      .live-display .standings-card {
+        width: min(1000px, 94vw);
+        padding: clamp(26px, 4vw, 48px);
+        border-radius: 24px;
+        background: rgba(255,255,255,.08);
+        box-shadow: 0 20px 60px rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.12);
+      }
+      .live-display .standings-title { font-size: clamp(1.6rem,4vw,3rem); margin:0 0 8px; }
+      .live-display .standings-subtitle { opacity:.68; margin-bottom:26px; }
+      .live-display .stand-row { display:grid; grid-template-columns:72px 1fr 100px; gap:16px; align-items:center; margin:14px 0; text-align:left; }
+      .live-display .stand-rank { font-size:clamp(1.2rem,3vw,2rem); font-weight:900; text-align:center; }
+      .live-display .stand-bar { height:24px; border-radius:999px; background:rgba(255,255,255,.12); overflow:hidden; }
+      .live-display .stand-fill { height:100%; border-radius:999px; background:rgba(255,255,255,.72); }
+      .live-display .stand-gap { font-size:clamp(1rem,2.2vw,1.4rem); font-weight:800; text-align:right; }
+      @media (max-width:700px) { .live-display .stand-row { grid-template-columns:54px 1fr 82px; gap:9px; } .live-display .stand-bar { height:20px; } }
     </style>
     <div class="live-display">
       <div class="brand">🎤 ROYAL KARAOKE SKN</div>
       <h1 class="title">LIVE COMPETITION</h1>
       <div class="status">${E(statusText)}</div>
+      ${showStandings ? `
+        <div class="standings-card">
+          <h2 class="standings-title">PROVISIONAL STANDINGS</h2>
+          <div class="standings-subtitle">After ${completedCount} completed performances · anonymous positions · score gaps only</div>
+          ${standings.length ? standings.map((item, index) => {
+            const leader = standings[0]?.score || 0;
+            const gap = Math.max(0, leader - item.score);
+            const width = leader > 0 ? Math.max(4, (item.score / leader) * 100) : 0;
+            return `<div class="stand-row"><div class="stand-rank">${index === 0 ? "LEADER" : `#${index + 1}`}</div><div class="stand-bar"><div class="stand-fill" style="width:${width.toFixed(1)}%"></div></div><div class="stand-gap">${index === 0 ? "0.00" : `−${gap.toFixed(2)}`}</div></div>`;
+          }).join("") : `<p class="muted">No completed standings are available yet.</p>`}
+        </div>
+      ` : `
       <div class="performer-card">
         ${active ? `
           <div class="eyebrow">NOW PERFORMING${active.round ? ` · ROUND ${E(active.round)}` : ""}</div>
@@ -1845,7 +1978,7 @@ function liveDisplay() {
           <div class="details">Please wait for the Auditor to activate the next performance.</div>
         `}
       </div>
-      ${next ? `
+      ${!showStandings && next ? `
         <div class="next">
           NEXT UP: <strong>#${E(next.number)} — ${E(performerName(next))}</strong>
         </div>
@@ -2929,10 +3062,6 @@ function judge() {
               : ""
           }
         </p>
-        <p class="muted" style="margin-top:8px">
-          Judging criteria: <strong>${E(a.criteriaVersion || D.activeCriteriaVersion || "current")}</strong>
-          · ${activeCriteria.length} segments · ${activeMaxTotal} points
-        </p>
       </div>
       <div class="card">
         <div class="notice">
@@ -3053,6 +3182,11 @@ function logout() {
   localStorage.removeItem(
     "rk_judge"
   );
+  try {
+    sessionStorage.removeItem("rk_judge_auth");
+    sessionStorage.removeItem("rk_judge");
+  } catch (_) {}
+  selectedLoginJudge = null;
   page = "home";
   render();
 }
@@ -3950,49 +4084,55 @@ function wire() {
     document
       .querySelectorAll(".jl")
       .forEach(button => {
-        button.addEventListener(
-          "click",
-          () => {
-            const selectedJudge =
-              button.dataset.id;
-            if (
-              !J[selectedJudge]
-            ) {
-              alert(
-                "Invalid judge."
-              );
-              return;
-            }
-            if (
-              J[selectedJudge].no >
-              judgeCount()
-            ) {
-              alert(
-                "That judge is not enabled for this competition."
-              );
-              return;
-            }
-            judgeFromAuditor = false;
-role =
-              "judge";
-            jid =
-              selectedJudge;
-            localStorage.setItem(
-              "rk_role",
-              role
-            );
-            localStorage.setItem(
-              "rk_judge",
-              jid
-            );
-            draft = {};
-            draftPerformanceId =
-              D.active ||
-              null;
-            render();
+        button.addEventListener("click", () => {
+          const selectedJudge = button.dataset.id;
+          if (!J[selectedJudge] || J[selectedJudge].no > judgeCount()) {
+            alert("That Judge is not enabled for this competition.");
+            return;
           }
-        );
+          selectedLoginJudge = selectedJudge;
+          render();
+        });
       });
+    document.getElementById("judgeLogin")?.addEventListener("click", async () => {
+      const selectedJudge = selectedLoginJudge;
+      const password = document.getElementById("judgeLoginPassword")?.value || "";
+      if (!selectedJudge || !J[selectedJudge]) {
+        alert("Please select your assigned Judge number first.");
+        return;
+      }
+      if (!password) {
+        alert("Please enter your password.");
+        return;
+      }
+      const stored = judgePasswordHash(selectedJudge);
+      if (!stored) {
+        alert("A password has not been created for this Judge. Please ask the Auditor to set it.");
+        return;
+      }
+      try {
+        const enteredHash = await hashJudgePassword(password);
+        if (enteredHash !== stored) {
+          alert("Incorrect password. Please try again.");
+          return;
+        }
+        judgeFromAuditor = false;
+        role = "judge";
+        jid = selectedJudge;
+        try {
+          sessionStorage.setItem("rk_judge_auth", "1");
+          sessionStorage.setItem("rk_judge", jid);
+        } catch (_) {}
+        localStorage.removeItem("rk_role");
+        localStorage.removeItem("rk_judge");
+        draft = {};
+        draftPerformanceId = D.active || null;
+        selectedLoginJudge = null;
+        render();
+      } catch (error) {
+        alert("The Judge login could not be completed.\n\n" + error.message);
+      }
+    });
     return;
   }
   /* =======================================================
@@ -4275,6 +4415,7 @@ role =
   document
     .getElementById("saveCompetitionDetails")
     ?.addEventListener("click", saveCompetitionDetails);
+  document.getElementById("saveJudgePasswords")?.addEventListener("click", saveJudgePasswords);
   document.getElementById("saveBonusPoints")?.addEventListener("click", saveBonusPoints);
   /* =======================================================
      COMPETITION TYPE
@@ -4408,7 +4549,6 @@ role =
             {
               [`event/contestants/${id}/criteria`]: activationCriteria,
               [`event/contestants/${id}/criteriaVersion`]: criteriaVersion,
-              [`event/contestants/${id}/criteriaAppVersion`]: APP_VERSION,
               [`event/activeCriteria`]: activationCriteria,
               [`event/activeCriteriaVersion`]: criteriaVersion,
               [`event/active`]: id
