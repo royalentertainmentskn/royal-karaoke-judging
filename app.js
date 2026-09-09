@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.5.1";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -47,13 +47,17 @@ function criteriaTotal(list = C) {
   return list.reduce((total, item) => total + Number(item[2] || 0), 0);
 }
 function criteriaForPerformance(performance) {
-  // The active performance always uses the criteria snapshot published
-  // by the Auditor at activation time. This is the source of truth for
-  // every Judge tablet currently scoring that performance.
+  // SOURCE OF TRUTH: the criteria snapshot stored on the performance.
+  // This preserves the working v1.4d behavior and prevents an older global
+  // criteria set from appearing on a Judge tablet.
+  if (performance?.criteria) {
+    return normalizeCriteria(performance.criteria);
+  }
+  // Backward compatibility for performances created before snapshots.
   if (performance && D.active && performance.id === D.active && D.activeCriteria) {
     return normalizeCriteria(D.activeCriteria);
   }
-  return normalizeCriteria(performance?.criteria || D.criteria || C);
+  return normalizeCriteria(D.criteria || C);
 }
 function draftTotalForCriteria(list, source = draft) {
   return list.reduce((total, [key]) => total + (Number(source[key]) || 0), 0);
@@ -4719,27 +4723,22 @@ function wire() {
    RENDER
    ========================================================= */
 function render() {
-  if (
-    !D ||
-    !D.name
-  ) {
+  // Public display must render independently of the competition name.
+  // This also makes a fresh Firebase event show the display instead of
+  // getting stuck on a blank/loading state.
+  if (isLiveDisplay()) {
+    root.innerHTML = liveDisplay();
+    return;
+  }
+  if (!D || !D.name) {
     root.innerHTML = `
       <div class="wrap">
         <div class="card hero">
-          <div class="big">
-            🎤
-          </div>
-          <h2>
-            Loading Royal Karaoke SKN...
-          </h2>
+          <div class="big">🎤</div>
+          <h2>Loading Royal Karaoke SKN...</h2>
         </div>
       </div>
     `;
-    return;
-  }
-  /* VERSION 1.3 — PUBLIC LIVE DISPLAY */
-  if (isLiveDisplay()) {
-    root.innerHTML = liveDisplay();
     return;
   }
   /* LOGIN */
