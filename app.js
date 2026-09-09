@@ -15,6 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
+const APP_VERSION = "1.4c";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -44,6 +45,12 @@ function criteriaLocked() {
 }
 function criteriaTotal(list = C) {
   return list.reduce((total, item) => total + Number(item[2] || 0), 0);
+}
+function criteriaForPerformance(performance) {
+  return normalizeCriteria(performance?.criteria || D.criteria || C);
+}
+function draftTotalForCriteria(list, source = draft) {
+  return list.reduce((total, [key]) => total + (Number(source[key]) || 0), 0);
 }
 function bonusPoints() {
   const n = Number(D.bonusPoints);
@@ -209,13 +216,8 @@ const A = () =>
 /* =========================================================
    CURRENT DRAFT TOTAL
    ========================================================= */
-const T = () =>
-  C.reduce(
-    (total, [key]) =>
-      total +
-      (Number(draft[key]) || 0),
-    0
-  );
+const T = (list = C) =>
+  draftTotalForCriteria(list, draft);
 /* =========================================================
    TEAMS
    ========================================================= */
@@ -2739,7 +2741,9 @@ function auditorJudgeCorrection() {
   const judge = judgeId ? J[judgeId] : null;
   const score = performanceId && judgeId ? S()[performanceId]?.[judgeId] : null;
   if (!performance || !judge || !score) return `<div class="wrap"><div class="card hero"><h1>Judge Score Correction</h1><p class="warn">There is no submitted score available for this judge on the current performance.</p><button id="returnAuditorCorrection" type="button" class="primary" style="width:100%">← RETURN TO AUDITOR</button></div></div>`;
-  return `<div class="wrap"><div class="card hero"><span class="pill">AUDITOR — SCORE CORRECTION</span><div class="big">#${E(performance.number)}</div><h1>${E(performance.name)}${performance.category === "Duet" && performance.name2 ? `<br>& ${E(performance.name2)}` : ""}</h1><h2>${E(judge.name)}</h2><p>${E(performance.category || "")}${performance.song ? ` · ${E(performance.song)}` : ""}${performance.round ? ` · Round ${E(performance.round)}` : ""}</p>${performance.bonusEligible ? `<p class="ok">Early-registration bonus: +${bonusPoints()} points</p>` : ""}<p class="warn">Review and correct this judge's submitted score before the next performance is activated.</p></div><div class="card">${C.map(([key,label,max]) => `<div class="score-block"><div class="score-title"><b>${E(label)}</b><span id="correction-display-${E(key)}">${Number(score[key] ?? 0)}/${max}</span></div><div class="score-buttons">${Array.from({length:max+1},(_,n)=>`<button class="correction-score-button ${Number(score[key])===n?"selected":""}" data-k="${E(key)}" data-n="${n}" type="button">${n}</button>`).join("")}</div></div>`).join("")}<div class="total" id="correction-total">TOTAL: ${Number(score.total||0)}/${MAX_TOTAL}</div><button id="saveJudgeCorrection" class="primary" style="width:100%" type="button">SAVE CORRECTED SCORE</button><button id="returnAuditorCorrection2" type="button" style="width:100%;margin-top:10px">← RETURN TO AUDITOR</button></div></div>`;
+  const criteria = criteriaForPerformance(performance);
+  const maxTotal = criteriaTotal(criteria);
+  return `<div class="wrap"><div class="card hero"><span class="pill">AUDITOR — SCORE CORRECTION</span><div class="big">#${E(performance.number)}</div><h1>${E(performance.name)}${performance.category === "Duet" && performance.name2 ? `<br>& ${E(performance.name2)}` : ""}</h1><h2>${E(judge.name)}</h2><p>${E(performance.category || "")}${performance.song ? ` · ${E(performance.song)}` : ""}${performance.round ? ` · Round ${E(performance.round)}` : ""}</p>${performance.bonusEligible ? `<p class="ok">Early-registration bonus: +${bonusPoints()} points</p>` : ""}<p class="warn">Review and correct this judge's submitted score before the next performance is activated.</p></div><div class="card">${criteria.map(([key,label,max]) => `<div class="score-block"><div class="score-title"><b>${E(label)}</b><span id="correction-display-${E(key)}">${Number(score[key] ?? 0)}/${max}</span></div><div class="score-buttons">${Array.from({length:max+1},(_,n)=>`<button class="correction-score-button ${Number(score[key])===n?"selected":""}" data-k="${E(key)}" data-n="${n}" type="button">${n}</button>`).join("")}</div></div>`).join("")}<div class="total" id="correction-total">TOTAL: ${Number(score.total||0)}/${maxTotal}</div><button id="saveJudgeCorrection" class="primary" style="width:100%" type="button">SAVE CORRECTED SCORE</button><button id="returnAuditorCorrection2" type="button" style="width:100%;margin-top:10px">← RETURN TO AUDITOR</button></div></div>`;
 }
 function returnToAuditorFromCorrection() { correctionJudgeId=null; correctionPerformanceId=null; page="home"; render(); }
 async function saveJudgeCorrection() {
@@ -2748,9 +2752,11 @@ async function saveJudgeCorrection() {
   if (D.active!==performanceId) { alert("The active performance has changed. No correction was saved."); return; }
   const current=S()[performanceId]?.[judgeId];
   if (!current) { alert("That judge has no submitted score for this performance."); return; }
-  const corrected={...current};
-  for (const [key,label] of C) { const selected=document.querySelector(`.correction-score-button[data-k="${key}"].selected`); if (!selected) { alert(`Please select a score for ${label}.`); return; } corrected[key]=Number(selected.dataset.n); }
-  corrected.total=C.reduce((sum,[key])=>sum+Number(corrected[key]||0),0); corrected.corrected=true; corrected.correctedAt=Date.now(); corrected.correctedBy="Auditor";
+  const performance = D.contestants?.[performanceId];
+  const criteria = criteriaForPerformance(performance);
+  const corrected={...current, criteria};
+  for (const [key,label] of criteria) { const selected=document.querySelector(`.correction-score-button[data-k="${key}"].selected`); if (!selected) { alert(`Please select a score for ${label}.`); return; } corrected[key]=Number(selected.dataset.n); }
+  corrected.total=criteria.reduce((sum,[key])=>sum+Number(corrected[key]||0),0); corrected.corrected=true; corrected.correctedAt=Date.now(); corrected.correctedBy="Auditor";
   try { await set(ref(db,`event/scores/${performanceId}/${judgeId}`),corrected); alert(`${J[judgeId].name}'s corrected score has been saved: ${corrected.total}/${MAX_TOTAL}.`); returnToAuditorFromCorrection(); } catch(error) { console.error("Judge score correction error:",error); alert("The corrected score could not be saved.\n\n"+error.message); }
 }
 
@@ -2790,6 +2796,8 @@ function judge() {
       : null;
   const team =
     getContestantTeam(a);
+  const activeCriteria = criteriaForPerformance(a);
+  const activeMaxTotal = criteriaTotal(activeCriteria);
   /* LOCKED SCORE */
   if (old) {
     return `
@@ -2831,7 +2839,7 @@ function judge() {
           <div class="big">
             ${Number(
               old.total || 0
-            ).toFixed(0)}/100
+            ).toFixed(0)}/${activeMaxTotal}
           </div>
           <p class="ok">
             Your score is locked.
@@ -2898,10 +2906,10 @@ function judge() {
           <br>
           Total possible:
           <b>
-            ${MAX_TOTAL} points.
+            ${activeMaxTotal} points.
           </b>
         </div>
-        ${C.map(
+        ${activeCriteria.map(
           ([key, label, max]) => `
             <div class="score-block">
               <div class="score-title">
@@ -2941,9 +2949,9 @@ function judge() {
         ).join("")}
         <div class="total">
           TOTAL:
-          ${T()}
+          ${T(activeCriteria)}
           /
-          ${MAX_TOTAL}
+          ${activeMaxTotal}
         </div>
         <button
           id="submit"
@@ -3841,10 +3849,10 @@ async function deleteTeam(
 /* =========================================================
    VALIDATE JUDGE DRAFT
    ========================================================= */
-function validateDraft() {
+function validateDraft(criteria = C) {
   for (
     const [key, label, max]
-    of C
+    of criteria
   ) {
     const value =
       Number(
@@ -3864,11 +3872,11 @@ function validateDraft() {
     }
   }
   const total =
-    T();
+    T(criteria);
   if (
     !Number.isInteger(total) ||
     total < 0 ||
-    total > MAX_TOTAL
+    total > criteriaTotal(criteria)
   ) {
     return {
       ok: false,
@@ -3968,6 +3976,9 @@ role =
       logout();
       return;
     }
+    const judgePerformance = A();
+    const judgeCriteria = criteriaForPerformance(judgePerformance);
+    const judgeMaxTotal = criteriaTotal(judgeCriteria);
     document
       .querySelectorAll(".sb")
       .forEach(button => {
@@ -3981,7 +3992,7 @@ role =
                 button.dataset.n
               );
             const criterion =
-              C.find(
+              judgeCriteria.find(
                 x =>
                   x[0] === key
               );
@@ -4032,7 +4043,7 @@ role =
             return;
           }
           const validation =
-            validateDraft();
+            validateDraft(judgeCriteria);
           if (!validation.ok) {
             alert(
               validation.message
@@ -4055,7 +4066,7 @@ role =
           }
           if (
             !confirm(
-              `Submit ${total}/${MAX_TOTAL}?\n\n` +
+              `Submit ${total}/${judgeMaxTotal}?\n\n` +
               "This score will be permanently locked."
             )
           ) {
@@ -4080,6 +4091,7 @@ role =
                   }
                   return {
                     ...draft,
+                    criteria: judgeCriteria,
                     total,
                     judgeId:
                       jid,
@@ -4104,7 +4116,7 @@ role =
             }
             draft = {};
             alert(
-              `Score submitted successfully: ${total}/${MAX_TOTAL}`
+              `Score submitted successfully: ${total}/${judgeMaxTotal}`
             );
             render();
           } catch (error) {
@@ -4205,21 +4217,22 @@ role =
   document.getElementById("saveJudgeCorrection")?.addEventListener("click", saveJudgeCorrection);
   document.getElementById("returnAuditorCorrection")?.addEventListener("click", returnToAuditorFromCorrection);
   document.getElementById("returnAuditorCorrection2")?.addEventListener("click", returnToAuditorFromCorrection);
+  const correctionCriteria = criteriaForPerformance(correctionPerformanceId ? D.contestants?.[correctionPerformanceId] : D.contestants?.[D.active]);
   document.querySelectorAll(".correction-score-button").forEach(button => {
     button.addEventListener("click", () => {
       const key = button.dataset.k;
       document.querySelectorAll(`.correction-score-button[data-k="${key}"]`).forEach(b => b.classList.remove("selected"));
       button.classList.add("selected");
-      const max = C.find(x => x[0] === key)?.[2] || 0;
+      const max = correctionCriteria.find(x => x[0] === key)?.[2] || 0;
       const display = document.getElementById(`correction-display-${key}`);
       if (display) display.textContent = `${Number(button.dataset.n)}/${max}`;
       let total = 0;
-      for (const [k] of C) {
+      for (const [k] of correctionCriteria) {
         const selected = document.querySelector(`.correction-score-button[data-k="${k}"].selected`);
         total += Number(selected?.dataset.n || 0);
       }
       const totalEl = document.getElementById("correction-total");
-      if (totalEl) totalEl.textContent = `TOTAL: ${total}/${MAX_TOTAL}`;
+      if (totalEl) totalEl.textContent = `TOTAL: ${total}/${criteriaTotal(correctionCriteria)}`;
     });
   });
   /* =======================================================
@@ -4354,10 +4367,14 @@ role =
           }
         }
         try {
+          const activationCriteria = normalizeCriteria(C);
+          const criteriaVersion = Date.now();
           await update(
-            ref(db, "event"),
+            ref(db),
             {
-              active: id
+              [`event/contestants/${id}/criteria`]: activationCriteria,
+              [`event/contestants/${id}/criteriaVersion`]: criteriaVersion,
+              [`event/active`]: id
             }
           );
           draft = {};
