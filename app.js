@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.2";
+const APP_VERSION = "1.5.3";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -102,13 +102,9 @@ const root = document.getElementById("app");
 const isJudgePortal = () =>
   new URLSearchParams(window.location.search).get("judge") === "1" ||
   window.location.hash === "#judge";
-const isLiveDisplay = () =>
-  new URLSearchParams(window.location.search).get("display") === "1" ||
-  window.location.hash === "#display";
 let D = {};
 let role =
   localStorage.getItem("rk_role") || null;
-if (isLiveDisplay()) role = null;
 // The dedicated Judge Portal always starts at its login screen.
 // Judge authentication is kept in sessionStorage so a refresh in the same
 // tab can continue, but a different tablet/tab must authenticate separately.
@@ -1770,233 +1766,6 @@ function cont() {
     ${registeredPerformances()}
   `;
 }
-/* =========================================================
-   LIVE DISPLAY — ANONYMOUS STANDINGS
-   ========================================================= */
-function completedPerformanceCount() {
-  return cs().filter(x => performanceResult(x.id).complete).length;
-}
-function liveStandings() {
-  const completed = cs().filter(x => performanceResult(x.id).complete);
-  if (!completed.length) return [];
-  if (isTeamMode()) {
-    const groups = {};
-    completed.forEach(x => {
-      const team = getContestantTeam(x) || "__UNASSIGNED__";
-      if (!groups[team]) groups[team] = { count: 0, total: 0 };
-      const result = performanceResult(x.id);
-      groups[team].count++;
-      groups[team].total += performanceFinalScore(x, result);
-    });
-    return Object.values(groups)
-      .filter(x => x.count > 0)
-      .map(x => ({ score: x.total / x.count, count: x.count }))
-      .sort((a, b) => b.score - a.score);
-  }
-  const groups = {};
-  completed.forEach(x => {
-    const gid = x.individualGroupId || x.contestantId || x.id;
-    if (!groups[gid]) groups[gid] = { scores: [], bonusEligible: false };
-    const result = performanceResult(x.id);
-    groups[gid].scores.push(Number(result.avg || 0));
-    groups[gid].bonusEligible = groups[gid].bonusEligible || x.bonusEligible === true;
-  });
-  return Object.values(groups)
-    .filter(x => x.scores.length)
-    .map(x => ({ score: (x.scores.reduce((a, b) => a + b, 0) / x.scores.length) + (x.scores.length >= 2 && x.bonusEligible ? bonusPoints() : 0), count: x.scores.length }))
-    .sort((a, b) => b.score - a.score);
-}
-function shouldShowLiveStandings(active, complete) {
-  const completedCount = completedPerformanceCount();
-  if (completedCount < 2 || completedCount % 2 !== 0) return false;
-  // Show the standings between performances, or immediately after an even-numbered
-  // performance is fully judged. Once the next performance is activated, return to the
-  // normal performer display.
-  return !active || complete;
-}
-
-/* =========================================================
-   VERSION 1.4b — LIVE COMPETITION DISPLAY
-   Public display only. Never shows judge scores.
-   ========================================================= */
-function liveDisplay() {
-  const list = cs();
-  const active = A();
-  const activeIndex = active
-    ? list.findIndex(x => x.id === D.active)
-    : -1;
-  const next = activeIndex >= 0
-    ? list.slice(activeIndex + 1).find(hasDrawNumber) || null
-    : list.find(hasDrawNumber) || null;
-
-  const activeScores = active
-    ? S()[D.active] || {}
-    : {};
-  const submitted = active
-    ? activeJudges().filter(judge => activeScores[judge.id]?.submitted === true).length
-    : 0;
-  const complete = active && submitted === judgeCount();
-  const completedCount = completedPerformanceCount();
-  const standings = liveStandings();
-  const showStandings = shouldShowLiveStandings(active, complete);
-
-  const performerName = x =>
-    x?.category === "Duet" && x?.name2
-      ? `${x.name} & ${x.name2}`
-      : (x?.name || "");
-
-  const statusText = !active
-    ? "WAITING FOR PERFORMANCE"
-    : complete
-    ? "JUDGING COMPLETE"
-    : "PERFORMANCE IN PROGRESS";
-
-  return `
-    <style>
-      .live-display {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        padding: 34px;
-        box-sizing: border-box;
-        background: linear-gradient(135deg, #10131a, #1d2330);
-        color: #fff;
-      }
-      .live-display .brand {
-        font-size: clamp(1rem, 2vw, 1.5rem);
-        letter-spacing: .16em;
-        opacity: .78;
-        margin-bottom: 18px;
-      }
-      .live-display .title {
-        font-size: clamp(2rem, 5vw, 4rem);
-        margin: 0 0 30px;
-      }
-      .live-display .status {
-        display: inline-block;
-        padding: 12px 24px;
-        border-radius: 999px;
-        font-weight: 800;
-        letter-spacing: .08em;
-        background: rgba(255,255,255,.12);
-        margin-bottom: 26px;
-      }
-      .live-display .performer-card {
-        width: min(1100px, 94vw);
-        padding: clamp(28px, 5vw, 58px);
-        border-radius: 24px;
-        background: rgba(255,255,255,.08);
-        box-shadow: 0 20px 60px rgba(0,0,0,.35);
-        border: 1px solid rgba(255,255,255,.12);
-      }
-      .live-display .eyebrow {
-        font-size: clamp(1rem, 2vw, 1.35rem);
-        opacity: .72;
-        letter-spacing: .12em;
-      }
-      .live-display .number {
-        font-size: clamp(4rem, 12vw, 9rem);
-        line-height: .95;
-        font-weight: 900;
-        margin: 12px 0 18px;
-      }
-      .live-display .name {
-        font-size: clamp(2rem, 6vw, 5rem);
-        font-weight: 900;
-        line-height: 1.05;
-        margin: 0;
-      }
-      .live-display .details {
-        font-size: clamp(1.05rem, 2.4vw, 1.7rem);
-        margin-top: 22px;
-        opacity: .86;
-      }
-      .live-display .next {
-        margin-top: 30px;
-        font-size: clamp(1rem, 2vw, 1.35rem);
-        opacity: .78;
-      }
-      .live-display .next strong {
-        color: #fff;
-      }
-      .live-display .footer {
-        margin-top: 28px;
-        font-size: .9rem;
-        opacity: .5;
-      }
-      .live-display .standings-card {
-        width: min(1000px, 94vw);
-        padding: clamp(26px, 4vw, 48px);
-        border-radius: 24px;
-        background: rgba(255,255,255,.08);
-        box-shadow: 0 20px 60px rgba(0,0,0,.35);
-        border: 1px solid rgba(255,255,255,.12);
-      }
-      .live-display .standings-title { font-size: clamp(1.6rem,4vw,3rem); margin:0 0 8px; }
-      .live-display .standings-subtitle { opacity:.68; margin-bottom:26px; }
-      .live-display .stand-row { display:grid; grid-template-columns:72px 1fr 100px; gap:16px; align-items:center; margin:14px 0; text-align:left; }
-      .live-display .stand-rank { font-size:clamp(1.2rem,3vw,2rem); font-weight:900; text-align:center; }
-      .live-display .stand-bar { height:24px; border-radius:999px; background:rgba(255,255,255,.12); overflow:hidden; }
-      .live-display .stand-fill { height:100%; border-radius:999px; background:rgba(255,255,255,.72); }
-      .live-display .stand-gap { font-size:clamp(1rem,2.2vw,1.4rem); font-weight:800; text-align:right; }
-      @media (max-width:700px) { .live-display .stand-row { grid-template-columns:54px 1fr 82px; gap:9px; } .live-display .stand-bar { height:20px; } }
-    </style>
-    <div class="live-display">
-      <div class="brand">🎤 ROYAL KARAOKE SKN</div>
-      <h1 class="title">LIVE COMPETITION</h1>
-      <div class="status">${E(statusText)}</div>
-
-  const standingsMarkup = `
-    <div class="standings-card">
-      <h2 class="standings-title">PROVISIONAL STANDINGS</h2>
-      <div class="standings-subtitle">After ${completedCount} completed performances · anonymous positions · score gaps only</div>
-      ${standingsBody}
-    </div>
-  `;
-
-  const performerMarkup = `
-    <div class="performer-card">
-      ${active ? `
-        <div class="eyebrow">NOW PERFORMING${active.round ? ` · ROUND ${E(active.round)}` : ""}</div>
-        <div class="number">#${E(active.number)}</div>
-        <h2 class="name">${E(performerName(active))}</h2>
-        <div class="details">
-          ${E(active.category || "Performance")}
-          ${active.song ? ` · ${E(active.song)}` : ""}
-          ${getContestantTeam(active) ? ` · ${E(getContestantTeam(active))}` : ""}
-        </div>
-        <div class="next">
-          ${complete
-            ? "All judges have submitted. Awaiting the next performance."
-            : `Judging in progress · ${submitted} of ${judgeCount()} judges submitted`
-          }
-        </div>
-      ` : `
-        <div class="eyebrow">GET READY</div>
-        <h2 class="name">The competition will begin shortly</h2>
-        <div class="details">Please wait for the Auditor to activate the next performance.</div>
-      `}
-    </div>
-    ${next ? `
-      <div class="next">
-        NEXT UP: <strong>#${E(next.number)} — ${E(performerName(next))}</strong>
-      </div>
-    ` : ""}
-  `;
-
-    <div class="live-display">
-      <div class="brand">🎤 ROYAL KARAOKE SKN</div>
-      <h1 class="title">LIVE COMPETITION</h1>
-      <div class="status">${E(statusText)}</div>
-      ${showStandings ? standingsMarkup : performerMarkup}
-      <div class="footer">Scores are private and are not displayed on this screen.</div>
-    </div>
-  `;
-}
-
 /* =========================================================
    LIVE SCORES
    ========================================================= */
@@ -4728,13 +4497,6 @@ function wire() {
    RENDER
    ========================================================= */
 function render() {
-  // Public display must render independently of the competition name.
-  // This also makes a fresh Firebase event show the display instead of
-  // getting stuck on a blank/loading state.
-  if (isLiveDisplay()) {
-    root.innerHTML = liveDisplay();
-    return;
-  }
   if (!D || !D.name) {
     root.innerHTML = `
       <div class="wrap">
