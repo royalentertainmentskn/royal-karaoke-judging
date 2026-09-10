@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.1";
+const APP_VERSION = "1.5.2";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -1948,45 +1948,50 @@ function liveDisplay() {
       <div class="brand">🎤 ROYAL KARAOKE SKN</div>
       <h1 class="title">LIVE COMPETITION</h1>
       <div class="status">${E(statusText)}</div>
-      ${showStandings ? `
-        <div class="standings-card">
-          <h2 class="standings-title">PROVISIONAL STANDINGS</h2>
-          <div class="standings-subtitle">After ${completedCount} completed performances · anonymous positions · score gaps only</div>
-          ${standings.length ? standings.map((item, index) => {
-            const leader = standings[0]?.score || 0;
-            const gap = Math.max(0, leader - item.score);
-            const width = leader > 0 ? Math.max(4, (item.score / leader) * 100) : 0;
-            return `<div class="stand-row"><div class="stand-rank">${index === 0 ? "LEADER" : `#${index + 1}`}</div><div class="stand-bar"><div class="stand-fill" style="width:${width.toFixed(1)}%"></div></div><div class="stand-gap">${index === 0 ? "0.00" : `−${gap.toFixed(2)}`}</div></div>`;
-          }).join("") : `<p class="muted">No completed standings are available yet.</p>`}
+
+  const standingsMarkup = `
+    <div class="standings-card">
+      <h2 class="standings-title">PROVISIONAL STANDINGS</h2>
+      <div class="standings-subtitle">After ${completedCount} completed performances · anonymous positions · score gaps only</div>
+      ${standingsBody}
+    </div>
+  `;
+
+  const performerMarkup = `
+    <div class="performer-card">
+      ${active ? `
+        <div class="eyebrow">NOW PERFORMING${active.round ? ` · ROUND ${E(active.round)}` : ""}</div>
+        <div class="number">#${E(active.number)}</div>
+        <h2 class="name">${E(performerName(active))}</h2>
+        <div class="details">
+          ${E(active.category || "Performance")}
+          ${active.song ? ` · ${E(active.song)}` : ""}
+          ${getContestantTeam(active) ? ` · ${E(getContestantTeam(active))}` : ""}
+        </div>
+        <div class="next">
+          ${complete
+            ? "All judges have submitted. Awaiting the next performance."
+            : `Judging in progress · ${submitted} of ${judgeCount()} judges submitted`
+          }
         </div>
       ` : `
-      <div class="performer-card">
-        ${active ? `
-          <div class="eyebrow">NOW PERFORMING${active.round ? ` · ROUND ${E(active.round)}` : ""}</div>
-          <div class="number">#${E(active.number)}</div>
-          <h2 class="name">${E(performerName(active))}</h2>
-          <div class="details">
-            ${E(active.category || "Performance")}
-            ${active.song ? ` · ${E(active.song)}` : ""}
-            ${getContestantTeam(active) ? ` · ${E(getContestantTeam(active))}` : ""}
-          </div>
-          <div class="next">
-            ${complete
-              ? "All judges have submitted. Awaiting the next performance."
-              : `Judging in progress · ${submitted} of ${judgeCount()} judges submitted`
-            }
-          </div>
-        ` : `
-          <div class="eyebrow">GET READY</div>
-          <h2 class="name">The competition will begin shortly</h2>
-          <div class="details">Please wait for the Auditor to activate the next performance.</div>
-        `}
+        <div class="eyebrow">GET READY</div>
+        <h2 class="name">The competition will begin shortly</h2>
+        <div class="details">Please wait for the Auditor to activate the next performance.</div>
+      `}
+    </div>
+    ${next ? `
+      <div class="next">
+        NEXT UP: <strong>#${E(next.number)} — ${E(performerName(next))}</strong>
       </div>
-      ${!showStandings && next ? `
-        <div class="next">
-          NEXT UP: <strong>#${E(next.number)} — ${E(performerName(next))}</strong>
-        </div>
-      ` : ""}
+    ` : ""}
+  `;
+
+    <div class="live-display">
+      <div class="brand">🎤 ROYAL KARAOKE SKN</div>
+      <h1 class="title">LIVE COMPETITION</h1>
+      <div class="status">${E(statusText)}</div>
+      ${showStandings ? standingsMarkup : performerMarkup}
       <div class="footer">Scores are private and are not displayed on this screen.</div>
     </div>
   `;
