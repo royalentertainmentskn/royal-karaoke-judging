@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.3";
+const APP_VERSION = "1.5.4";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -367,6 +367,7 @@ async function initializeEvent() {
         criteria: DEFAULT_CRITERIA.map(x => [...x]),
         activeCriteria: DEFAULT_CRITERIA.map(x => [...x]),
         bonusPoints: 0,
+        individualRoundCount: 2,
         judgePasswords: {}
       }
     );
@@ -418,6 +419,9 @@ async function initializeEvent() {
     updates[
       "event/activeCriteria"
     ] = normalizeCriteria(event.criteria || DEFAULT_CRITERIA);
+  }
+  if (![1, 2].includes(Number(event.individualRoundCount))) {
+    updates["event/individualRoundCount"] = 2;
   }
   if (event.bonusPoints === undefined || event.bonusPoints === null || !Number.isFinite(Number(event.bonusPoints))) {
     updates[
@@ -1397,13 +1401,17 @@ function duetRegistration() {
 function individualRegistration() {
   return `
     <div class="card">
-      <h2>🎤 Register Individual Contestant — 2 Rounds</h2>
-      <p class="muted">Each individual contestant must register <strong>two different songs</strong>. Round 1 and Round 2 are separate performances and are scored independently by every judge.
+      <h2>🎤 Register Individual Contestant — 1 or 2 Rounds</h2>
+      <p class="muted">Choose whether this contestant will compete in <strong>one round or two rounds</strong>. With two rounds, each round is a separate performance and is scored independently by every judge. With one round, the single completed score becomes the contestant's final score.
       ${bonusPoints() > 0 ? `The configured early-registration bonus is <strong>+${bonusPoints()} points</strong>; tick the box if this contestant is eligible.` : 'No early-registration bonus is currently configured.'}</p>
       <div class="form-grid">
         <input id="individualId" placeholder="Contestant ID / Number" maxlength="30">
         <input id="individualName" placeholder="Contestant Name" maxlength="100">
         <select id="individualGender"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        <select id="individualRoundCount">
+          <option value="2" selected>2 Rounds</option>
+          <option value="1">1 Round</option>
+        </select>
         <input id="individualSong1" placeholder="Round 1 Song" maxlength="150">
         <input id="individualSong2" placeholder="Round 2 Song" maxlength="150">
         <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #ddd;border-radius:8px;grid-column:1/-1">
@@ -1411,7 +1419,8 @@ function individualRegistration() {
           <span><strong>Early Registration Bonus</strong> — award the configured +${bonusPoints()} points to this contestant</span>
         </label>
       </div>
-      <br><button id="addIndividual" class="primary" type="button">REGISTER INDIVIDUAL — CREATE BOTH ROUNDS</button>
+      <p id="individualRoundHelp" class="muted">For 2 rounds, enter two different songs. For 1 round, only Round 1 Song is required.</p>
+      <br><button id="addIndividual" class="primary" type="button">REGISTER INDIVIDUAL</button>
     </div>
   `;
 }
@@ -2149,50 +2158,53 @@ function individualResults() {
   const groups = {};
   cs().filter(x => x.individualGroupId || x.performerType === "Individual").forEach(x => {
     const gid = x.individualGroupId || `legacy_${x.id}`;
-    if (!groups[gid]) groups[gid] = { id: gid, name: x.name || "", gender: x.category || "", contestantId: x.contestantId || "", bonusEligible: false, rounds: {} };
+    if (!groups[gid]) groups[gid] = { id: gid, name: x.name || "", gender: x.category || "", contestantId: x.contestantId || "", bonusEligible: false, roundCount: Number(x.roundCount) === 1 ? 1 : 2, rounds: {} };
     groups[gid].bonusEligible = groups[gid].bonusEligible || x.bonusEligible === true;
+    if (Number(x.roundCount) === 1) groups[gid].roundCount = 1;
     const result = performanceResult(x.id);
     groups[gid].rounds[x.round || 1] = { performance: x, result };
   });
   const rows = Object.values(groups).map(g => {
     const r1 = g.rounds[1], r2 = g.rounds[2];
-    const complete = !!r1?.result.complete && !!r2?.result.complete;
-    const baseAverage = complete ? (Number(r1.result.avg) + Number(r2.result.avg)) / 2 : 0;
+    const expectedRounds = g.roundCount === 1 ? 1 : 2;
+    const complete = expectedRounds === 1 ? !!r1?.result.complete : !!r1?.result.complete && !!r2?.result.complete;
+    const baseScore = complete ? (expectedRounds === 1 ? Number(r1.result.avg) : (Number(r1.result.avg) + Number(r2.result.avg)) / 2) : 0;
     const bonus = g.bonusEligible ? bonusPoints() : 0;
-    const finalScore = complete ? baseAverage + bonus : 0;
-    return { ...g, r1, r2, complete, baseAverage, bonus, finalScore };
+    const finalScore = complete ? baseScore + bonus : 0;
+    return { ...g, expectedRounds, r1, r2, complete, baseScore, bonus, finalScore };
   });
   const ranked = rows.filter(x => x.complete).sort((a,b) => b.finalScore - a.finalScore);
   const winner = ranked[0];
   const maxFinal = 100 + bonusPoints();
-  const winnerCard = winner ? `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>${E(winner.name)}</h2><p>${E(winner.contestantId)} · ${E(winner.gender)}</p><div class="big">${winner.finalScore.toFixed(2)}</div><p>/${maxFinal} final score${winner.bonus ? ` · includes +${winner.bonus} bonus` : ""}</p></div>` : `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>—</h2><p>No contestant has two completed rounds yet.</p></div>`;
+  const winnerCard = winner ? `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>${E(winner.name)}</h2><p>${E(winner.contestantId)} · ${E(winner.gender)} · ${winner.expectedRounds} round${winner.expectedRounds === 1 ? "" : "s"}</p><div class="big">${winner.finalScore.toFixed(2)}</div><p>/${maxFinal} final score${winner.bonus ? ` · includes +${winner.bonus} bonus` : ""}</p></div>` : `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>—</h2><p>No contestant has completed the required round(s) yet.</p></div>`;
   return `
-    <h1>Individual Competition Results — 2 Rounds</h1>
+    <h1>Individual Competition Results — 1 or 2 Rounds</h1>
     <div class="results-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px 0">
       <button id="printResults" class="primary" type="button">🖨️ PRINT RESULTS</button>
       <button id="saveResults" type="button">💾 SAVE RESULTS (CSV)</button>
     </div>
-    <div class="grid">${winnerCard}<div class="card"><span class="muted">COMPLETED CONTESTANTS</span><div class="stat">${ranked.length}/${rows.length}</div><p>Both rounds completed</p></div></div>
-    <div class="card table-wrap"><h2>Final Individual Ranking</h2><p class="muted">Each round is scored independently. The two round scores are averaged, then the early-registration bonus (if awarded) is added once. Judging is out of 100; final score can be up to ${maxFinal} with a +${bonusPoints()} bonus.</p><table><tr><th>Rank</th><th>Contestant</th><th>ID</th><th>Gender</th><th>Round 1</th><th>Round 2</th><th>Bonus</th><th>Final Score</th><th>Status</th></tr>${rows.sort((a,b) => (b.complete-a.complete) || (b.finalScore-a.finalScore)).map(x => `<tr><td>${x.complete ? ranked.findIndex(r => r.id === x.id)+1 : "—"}</td><td><strong>${E(x.name)}</strong></td><td>${E(x.contestantId)}</td><td>${E(x.gender)}</td><td>${x.r1?.result.complete ? x.r1.result.avg.toFixed(2) : "—"}</td><td>${x.r2?.result.complete ? x.r2.result.avg.toFixed(2) : "—"}</td><td>${x.bonus ? `+${x.bonus}` : "—"}</td><td><strong>${x.complete ? x.finalScore.toFixed(2) : "—"}</strong> /${maxFinal}</td><td>${x.complete ? '<span class="ok">COMPLETE</span>' : '<span class="warn">PENDING</span>'}</td></tr>`).join("")}</table></div>
+    <div class="grid">${winnerCard}<div class="card"><span class="muted">COMPLETED CONTESTANTS</span><div class="stat">${ranked.length}/${rows.length}</div><p>Required round(s) completed</p></div></div>
+    <div class="card table-wrap"><h2>Final Individual Ranking</h2><p class="muted">For a 1-round contestant, the completed Round 1 score is the final base score. For a 2-round contestant, the two completed round scores are averaged. The early-registration bonus, if awarded, is added once. Judging is out of 100; final score can be up to ${maxFinal} with a +${bonusPoints()} bonus.</p><table><tr><th>Rank</th><th>Contestant</th><th>ID</th><th>Gender</th><th>Rounds</th><th>Round 1</th><th>Round 2</th><th>Bonus</th><th>Final Score</th><th>Status</th></tr>${rows.sort((a,b) => (b.complete-a.complete) || (b.finalScore-a.finalScore)).map(x => `<tr><td>${x.complete ? ranked.findIndex(r => r.id === x.id)+1 : "—"}</td><td><strong>${E(x.name)}</strong></td><td>${E(x.contestantId)}</td><td>${E(x.gender)}</td><td>${x.expectedRounds}</td><td>${x.r1?.result.complete ? x.r1.result.avg.toFixed(2) : "—"}</td><td>${x.expectedRounds === 2 && x.r2?.result.complete ? x.r2.result.avg.toFixed(2) : "—"}</td><td>${x.bonus ? `+${x.bonus}` : "—"}</td><td><strong>${x.complete ? x.finalScore.toFixed(2) : "—"}</strong> /${maxFinal}</td><td>${x.complete ? '<span class="ok">COMPLETE</span>' : '<span class="warn">PENDING</span>'}</td></tr>`).join("")}</table></div>
   `;
 }
 function saveIndividualResults() {
   const groups = {};
-  cs().filter(x => x.individualGroupId).forEach(x => {
-    const gid=x.individualGroupId;
-    if(!groups[gid]) groups[gid]={name:x.name||"",id:x.contestantId||"",gender:x.category||"",bonusEligible:false,rounds:{}};
+  cs().filter(x => x.individualGroupId || x.performerType === "Individual").forEach(x => {
+    const gid=x.individualGroupId || `legacy_${x.id}`;
+    if(!groups[gid]) groups[gid]={name:x.name||"",id:x.contestantId||"",gender:x.category||"",bonusEligible:false,roundCount:Number(x.roundCount)===1?1:2,rounds:{}};
     groups[gid].bonusEligible = groups[gid].bonusEligible || x.bonusEligible === true;
+    if (Number(x.roundCount) === 1) groups[gid].roundCount = 1;
     groups[gid].rounds[x.round||1] = performanceResult(x.id);
   });
-  const rows=Object.values(groups).map(g=>{const r1=g.rounds[1],r2=g.rounds[2];const complete=!!r1?.complete&&!!r2?.complete;const bonus=g.bonusEligible?bonusPoints():0;const base=complete?(r1.avg+r2.avg)/2:0;return {...g,complete,r1:r1?.avg||0,r2:r2?.avg||0,bonus,final:complete?base+bonus:0};}).sort((a,b)=>b.final-a.final);
-  const lines=["ROYAL KARAOKE SKN — INDIVIDUAL 2-ROUND RESULTS".split("|")];
+  const rows=Object.values(groups).map(g=>{const r1=g.rounds[1],r2=g.rounds[2],expectedRounds=g.roundCount===1?1:2;const complete=expectedRounds===1?!!r1?.complete:!!r1?.complete&&!!r2?.complete;const bonus=g.bonusEligible?bonusPoints():0;const base=complete?(expectedRounds===1?Number(r1.avg):(Number(r1.avg)+Number(r2.avg))/2):0;return {...g,complete,expectedRounds,r1:r1?.avg||0,r2:r2?.avg||0,bonus,final:complete?base+bonus:0};}).sort((a,b)=>b.final-a.final);
+  const lines=["ROYAL KARAOKE SKN — INDIVIDUAL RESULTS".split("|")];
   lines.push(["Competition",D.name||"","Venue",D.venue||""]); lines.push(["Date",D.date||"","Judges",judgeCount()]); lines.push(["Bonus Points",bonusPoints(),"Final Maximum",100+bonusPoints()]); lines.push([]);
-  lines.push(["Rank","Contestant ID","Contestant","Gender","Round 1","Round 2","Bonus","Final Score","Status"]);
-  let rank=0; rows.forEach(x=>{if(x.complete) rank++; lines.push([x.complete?rank:"",x.id,x.name,x.gender,x.complete?x.r1.toFixed(2):"",x.complete?x.r2.toFixed(2):"",x.complete?`+${x.bonus}`:"",x.complete?x.final.toFixed(2):"",x.complete?"COMPLETE":"PENDING"]);});
-  lines.push([]); lines.push(["Judging Criteria","Maximum Points"]); C.forEach(x=>lines.push([x[1],x[2]]));
-  lines.push([]); lines.push(["Exported",new Date().toLocaleString()]);
-  const csv=lines.map(row=>row.map(csvCell).join(",")).join("\r\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const link=document.createElement("a"); const safeName=String(D.name||"Royal_Karaoke_SKN").replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"")||"Royal_Karaoke_SKN"; link.href=url; link.download=`${safeName}_Individual_2_Round_Results.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  lines.push(["Rank","Contestant ID","Contestant","Gender","Rounds","Round 1","Round 2","Bonus","Final Score","Status"]);
+  let rank=0; rows.forEach(x=>{if(x.complete) rank++; lines.push([x.complete?rank:"",x.id,x.name,x.gender,x.expectedRounds,x.complete?x.r1.toFixed(2):"",x.expectedRounds===2&&x.complete?x.r2.toFixed(2):"",x.complete?`+${x.bonus}`:"",x.complete?x.final.toFixed(2):"",x.complete?"COMPLETE":"PENDING"]);});
+  lines.push([]); lines.push(["Judging Criteria","Maximum Points"]); C.forEach(x=>lines.push([x[1],x[2]])); lines.push([]); lines.push(["Exported",new Date().toLocaleString()]);
+  const csv=lines.map(row=>row.map(csvCell).join(",")).join("\r\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const link=document.createElement("a"); const safeName=String(D.name||"Royal_Karaoke_SKN").replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"")||"Royal_Karaoke_SKN"; link.href=url; link.download=`${safeName}_Individual_Results.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
 function results() {
   if (!isTeamMode()) return individualResults();
   const rows =
@@ -3475,30 +3487,34 @@ async function addIndividual() {
   const contestantId = document.getElementById("individualId")?.value.trim();
   const name = document.getElementById("individualName")?.value.trim();
   const gender = document.getElementById("individualGender")?.value;
+  const roundCount = Number(document.getElementById("individualRoundCount")?.value || 2);
   const song1 = document.getElementById("individualSong1")?.value.trim();
   const song2 = document.getElementById("individualSong2")?.value.trim();
   const bonusEligible = document.getElementById("individualBonus")?.checked === true;
   if (!contestantId) { alert("Enter the Contestant ID / Number."); return; }
   if (!name) { alert("Enter the contestant name."); return; }
   if (!["Male", "Female"].includes(gender)) { alert("Select the contestant's gender."); return; }
-  if (!song1 || !song2) { alert("Enter both Round 1 and Round 2 songs."); return; }
-  if (song1.toLowerCase() === song2.toLowerCase()) { alert("Round 1 and Round 2 must use two different songs."); return; }
+  if (![1, 2].includes(roundCount)) { alert("Select either 1 Round or 2 Rounds."); return; }
+  if (!song1) { alert("Enter the Round 1 song."); return; }
+  if (roundCount === 2 && !song2) { alert("Enter the Round 2 song."); return; }
+  if (roundCount === 2 && song1.toLowerCase() === song2.toLowerCase()) { alert("Round 1 and Round 2 must use two different songs."); return; }
   const duplicate = cs().some(x => String(x.contestantId || "").toLowerCase() === contestantId.toLowerCase());
   if (duplicate) { alert(`Contestant ID "${contestantId}" is already registered.`); return; }
   try {
     const groupId = push(ref(db, "event/contestants")).key;
     const updates = {};
     const now = Date.now();
-    for (const [round, song] of [[1, song1], [2, song2]]) {
+    const songs = roundCount === 2 ? [[1, song1], [2, song2]] : [[1, song1]];
+    for (const [round, song] of songs) {
       const performanceRef = push(ref(db, "event/contestants"));
       updates[`event/contestants/${performanceRef.key}`] = {
         number: null, order: null, name, category: gender, song, teamId: "", team: "", memberIds: [],
         contestantId, performerType: "Individual", performanceType: "Individual",
-        individualGroupId: groupId, round, bonusEligible, createdAt: now + round
+        individualGroupId: groupId, round, roundCount, bonusEligible, createdAt: now + round
       };
     }
     await update(ref(db), updates);
-    alert(`Individual contestant "${name}" registered successfully.\n\nRound 1: ${song1}\nRound 2: ${song2}${bonusEligible ? `\nEarly-registration bonus: +${bonusPoints()} points` : ""}`);
+    alert(`Individual contestant "${name}" registered successfully.\n\nRounds: ${roundCount}\nRound 1: ${song1}${roundCount === 2 ? `\nRound 2: ${song2}` : ""}${bonusEligible ? `\nEarly-registration bonus: +${bonusPoints()} points` : ""}`);
   } catch (error) { alert("Could not register individual contestant.\n\n" + error.message); }
 }
 /* =========================================================
@@ -4440,6 +4456,30 @@ function wire() {
         }
       }
     );
+  /* =======================================================
+     INDIVIDUAL ROUND COUNT
+     ======================================================= */
+  const individualRoundCount = document.getElementById("individualRoundCount");
+  const individualSong2 = document.getElementById("individualSong2");
+  const individualRoundHelp = document.getElementById("individualRoundHelp");
+  if (individualRoundCount) {
+    const syncIndividualRoundFields = () => {
+      const twoRounds = Number(individualRoundCount.value) === 2;
+      if (individualSong2) {
+        individualSong2.disabled = !twoRounds;
+        individualSong2.required = twoRounds;
+        individualSong2.style.opacity = twoRounds ? "1" : "0.55";
+        individualSong2.placeholder = twoRounds ? "Round 2 Song" : "Round 2 Song (not required)";
+      }
+      if (individualRoundHelp) {
+        individualRoundHelp.textContent = twoRounds
+          ? "For 2 rounds, enter two different songs. Both rounds must be completed before the final result is complete."
+          : "For 1 round, only Round 1 Song is required. The completed Round 1 score becomes the final base score.";
+      }
+    };
+    individualRoundCount.addEventListener("change", syncIndividualRoundFields);
+    syncIndividualRoundFields();
+  }
   /* =======================================================
      ADD INDIVIDUAL
      ======================================================= */
