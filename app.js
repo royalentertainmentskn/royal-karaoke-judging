@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.4";
+const APP_VERSION = "1.5.5";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -65,6 +65,9 @@ function draftTotalForCriteria(list, source = draft) {
 function bonusPoints() {
   const n = Number(D.bonusPoints);
   return Number.isInteger(n) && n > 0 ? n : 0;
+}
+function individualRoundCount() {
+  return Number(D.individualRoundCount) === 1 ? 1 : 2;
 }
 function performanceBonus(performance) {
   return performance?.bonusEligible === true ? bonusPoints() : 0;
@@ -649,7 +652,21 @@ function settingsCard() {
         <button id="competitionIndividual" type="button" class="${!isTeamMode() ? "primary" : ""}">INDIVIDUAL COMPETITION</button>
       </div>
       <p>Current: <strong>${E(competitionTypeLabel())}</strong></p>
-      ${locked ? `<p class="warn">Competition type, judging criteria and early-registration bonus are locked because registration or scoring has started. Use START NEW COMPETITION to configure the next event.</p>` : `<p class="muted">Choose the competition type, judging criteria and early-registration bonus before registering contestants.</p>`}
+      ${locked ? `<p class="warn">Competition type, judging criteria, individual round setting and early-registration bonus are locked because registration or scoring has started. Use START NEW COMPETITION to configure the next event.</p>` : `<p class="muted">Choose the competition type and all competition settings before registering contestants.</p>`}
+      ${!isTeamMode() ? `
+        <hr>
+        <h3>🎵 Individual Competition — Number of Rounds</h3>
+        <p class="muted">Set this once before registration. Every individual contestant registered in this competition will use the selected number of rounds.</p>
+        <div class="form-grid">
+          <select id="individualRoundCountSetting" ${locked ? "disabled" : ""}>
+            <option value="1" ${individualRoundCount() === 1 ? "selected" : ""}>1 Round</option>
+            <option value="2" ${individualRoundCount() === 2 ? "selected" : ""}>2 Rounds</option>
+          </select>
+        </div>
+        <br>
+        <button id="saveIndividualRoundCount" class="primary" type="button" ${locked ? "disabled" : ""}>SAVE INDIVIDUAL ROUND SETTING</button>
+        <p><strong>Current setting: ${individualRoundCount()} Round${individualRoundCount() === 1 ? "" : "s"} for all individual contestants</strong></p>
+      ` : ""}
       <hr>
       <p><b>Number of Judges</b></p>
       <div class="login-grid">
@@ -795,6 +812,24 @@ async function saveBonusPoints() {
     alert(`Early-registration bonus saved: +${value} point${value === 1 ? "" : "s"}.`);
     render();
   } catch (error) { alert("The bonus points could not be saved.\n\n" + error.message); }
+}
+async function saveIndividualRoundCount() {
+  if (criteriaLocked()) {
+    alert("The individual round setting is locked after registration or scoring starts. Start a new competition before changing it.");
+    return;
+  }
+  const value = Number(document.getElementById("individualRoundCountSetting")?.value);
+  if (![1, 2].includes(value)) {
+    alert("Choose either 1 Round or 2 Rounds.");
+    return;
+  }
+  try {
+    await set(ref(db, "event/individualRoundCount"), value);
+    alert(`Individual competition set to ${value} Round${value === 1 ? "" : "s"} for all contestants registered in this competition.`);
+    render();
+  } catch (error) {
+    alert("The individual round setting could not be saved.\n\n" + error.message);
+  }
 }
 /* =========================================================
    RESET
@@ -1399,27 +1434,34 @@ function duetRegistration() {
    INDIVIDUAL REGISTRATION
    ========================================================= */
 function individualRegistration() {
+  const rounds = individualRoundCount();
   return `
     <div class="card">
-      <h2>🎤 Register Individual Contestant — 1 or 2 Rounds</h2>
-      <p class="muted">Choose whether this contestant will compete in <strong>one round or two rounds</strong>. With two rounds, each round is a separate performance and is scored independently by every judge. With one round, the single completed score becomes the contestant's final score.
-      ${bonusPoints() > 0 ? `The configured early-registration bonus is <strong>+${bonusPoints()} points</strong>; tick the box if this contestant is eligible.` : 'No early-registration bonus is currently configured.'}</p>
+      <h2>🎤 Register Individual Contestant — ${rounds} Round${rounds === 1 ? "" : "s"}</h2>
+      <p class="muted">
+        The competition is set to <strong>${rounds} Round${rounds === 1 ? "" : "s"}</strong> for all individual contestants.
+        ${rounds === 2
+          ? "Enter a different song for Round 1 and Round 2. Each round is scored independently and the final base score is the average of the two rounds."
+          : "Only Round 1 is required. The completed Round 1 score becomes the contestant's final base score."}
+        ${bonusPoints() > 0
+          ? `The configured early-registration bonus is <strong>+${bonusPoints()} points</strong>; tick the box if this contestant is eligible.`
+          : "No early-registration bonus is currently configured."}
+      </p>
       <div class="form-grid">
         <input id="individualId" placeholder="Contestant ID / Number" maxlength="30">
-        <input id="individualName" placeholder="Contestant Name" maxlength="100">
-        <select id="individualGender"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select>
-        <select id="individualRoundCount">
-          <option value="2" selected>2 Rounds</option>
-          <option value="1">1 Round</option>
+        <input id="individualName" placeholder="Contestant / Stage Name" maxlength="100">
+        <select id="individualGender">
+          <option value="">Select Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
         </select>
         <input id="individualSong1" placeholder="Round 1 Song" maxlength="150">
-        <input id="individualSong2" placeholder="Round 2 Song" maxlength="150">
+        ${rounds === 2 ? `<input id="individualSong2" placeholder="Round 2 Song" maxlength="150">` : ""}
         <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #ddd;border-radius:8px;grid-column:1/-1">
-          <input id="individualBonus" type="checkbox" ${bonusPoints() === 0 ? 'disabled' : ''}>
+          <input id="individualBonus" type="checkbox" ${bonusPoints() === 0 ? "disabled" : ""}>
           <span><strong>Early Registration Bonus</strong> — award the configured +${bonusPoints()} points to this contestant</span>
         </label>
       </div>
-      <p id="individualRoundHelp" class="muted">For 2 rounds, enter two different songs. For 1 round, only Round 1 Song is required.</p>
       <br><button id="addIndividual" class="primary" type="button">REGISTER INDIVIDUAL</button>
     </div>
   `;
@@ -1718,6 +1760,11 @@ function registeredPerformances() {
                         }
                       </td>
                       <td>
+                        ${
+                          (!S()[x.id] || Object.keys(S()[x.id] || {}).length === 0) && D.active !== x.id
+                            ? `<button class="edit-performance" data-id="${E(x.id)}" type="button">Edit</button>`
+                            : `<span class="muted">Locked</span>`
+                        }
                         <button
                           class="del danger"
                           data-id="${E(x.id)}"
@@ -3487,7 +3534,7 @@ async function addIndividual() {
   const contestantId = document.getElementById("individualId")?.value.trim();
   const name = document.getElementById("individualName")?.value.trim();
   const gender = document.getElementById("individualGender")?.value;
-  const roundCount = Number(document.getElementById("individualRoundCount")?.value || 2);
+  const roundCount = individualRoundCount();
   const song1 = document.getElementById("individualSong1")?.value.trim();
   const song2 = document.getElementById("individualSong2")?.value.trim();
   const bonusEligible = document.getElementById("individualBonus")?.checked === true;
@@ -3652,6 +3699,143 @@ async function saveDrawNumbers() {
 /* =========================================================
    DELETE PERFORMANCE
    ========================================================= */
+/* =========================================================
+   EDIT REGISTERED PERFORMANCE
+   ========================================================= */
+async function editPerformance(id) {
+  const performance = D.contestants?.[id];
+  if (!performance) {
+    alert("That registered performance could not be found.");
+    return;
+  }
+  const scoreStarted = !!S()[id] && Object.keys(S()[id] || {}).length > 0;
+  if (scoreStarted || D.active === id) {
+    alert("This performance can no longer be edited because scoring has started. Edit performers before their performance is activated.");
+    return;
+  }
+
+  const type = performance.performerType || performance.performanceType || "";
+  const isIndividual = type === "Individual" && performance.category !== "Duet";
+
+  if (isIndividual) {
+    const groupId = performance.individualGroupId || id;
+    const records = cs().filter(x =>
+      (x.individualGroupId || x.id) === groupId &&
+      (x.performerType || x.performanceType) === "Individual"
+    );
+    const rows = records.length ? records : [performance];
+    const first = rows.find(x => Number(x.round) === 1) || performance;
+    const second = rows.find(x => Number(x.round) === 2);
+
+    const name = prompt("Contestant / Stage Name:", first.name || "");
+    if (name === null) return;
+    if (!name.trim()) { alert("The contestant / stage name cannot be blank."); return; }
+
+    const gender = prompt("Gender (Male or Female):", first.category || "");
+    if (gender === null) return;
+    if (!["Male", "Female"].includes(gender.trim())) { alert("Gender must be Male or Female."); return; }
+
+    const contestantId = prompt("Contestant ID / Number:", first.contestantId || "");
+    if (contestantId === null) return;
+    if (!contestantId.trim()) { alert("The Contestant ID / Number cannot be blank."); return; }
+
+    const song1 = prompt("Round 1 Song:", first.song || "");
+    if (song1 === null) return;
+    if (!song1.trim()) { alert("Round 1 Song cannot be blank."); return; }
+
+    let song2 = "";
+    if (second) {
+      song2 = prompt("Round 2 Song:", second.song || "");
+      if (song2 === null) return;
+      if (!song2.trim()) { alert("Round 2 Song cannot be blank."); return; }
+      if (song1.trim().toLowerCase() === song2.trim().toLowerCase()) {
+        alert("Round 1 and Round 2 must use two different songs.");
+        return;
+      }
+    }
+
+    const normalizedId = contestantId.trim().toLowerCase();
+    const duplicate = cs().some(x =>
+      (x.id !== id) &&
+      (x.individualGroupId || x.id) !== groupId &&
+      String(x.contestantId || "").trim().toLowerCase() === normalizedId
+    );
+    if (duplicate) {
+      alert(`Contestant ID "${contestantId.trim()}" is already registered.`);
+      return;
+    }
+
+    const updates = {};
+    for (const row of rows) {
+      updates[`event/contestants/${row.id}/name`] = name.trim();
+      updates[`event/contestants/${row.id}/category`] = gender.trim();
+      updates[`event/contestants/${row.id}/contestantId`] = contestantId.trim();
+      updates[`event/contestants/${row.id}/song`] = Number(row.round) === 2 ? song2.trim() : song1.trim();
+    }
+
+    // If this is a team member, keep the team roster and related duet names/IDs synchronized.
+    if (performance.teamId && Array.isArray(performance.memberIds) && performance.memberIds.length === 1) {
+      const teamId = performance.teamId;
+      const memberKey = performance.memberIds[0];
+      updates[`event/teams/${teamId}/members/${memberKey}/name`] = name.trim();
+      updates[`event/teams/${teamId}/members/${memberKey}/gender`] = gender.trim();
+      updates[`event/teams/${teamId}/members/${memberKey}/memberId`] = contestantId.trim();
+      updates[`event/teams/${teamId}/members/${memberKey}/song`] = song1.trim();
+
+      const team = D.teams?.[teamId];
+      const duetId = team?.performanceIds?.duet;
+      const duet = duetId ? D.contestants?.[duetId] : null;
+      if (duet && Array.isArray(duet.memberIds) && duet.memberIds.includes(memberKey)) {
+        const ids = Array.isArray(duet.contestantIds) ? [...duet.contestantIds] : [];
+        const oldMemberId = performance.contestantId;
+        const pos = ids.indexOf(oldMemberId);
+        if (pos >= 0) ids[pos] = contestantId.trim();
+        updates[`event/contestants/${duetId}/contestantIds`] = ids;
+        if (duet.memberIds[0] === memberKey) {
+          updates[`event/contestants/${duetId}/name`] = name.trim();
+        }
+        if (duet.memberIds[1] === memberKey) {
+          updates[`event/contestants/${duetId}/name2`] = name.trim();
+        }
+        if (team.duet?.member1?.memberKey === memberKey) {
+          updates[`event/teams/${teamId}/duet/member1/name`] = name.trim();
+          updates[`event/teams/${teamId}/duet/member1/memberId`] = contestantId.trim();
+        }
+        if (team.duet?.member2?.memberKey === memberKey) {
+          updates[`event/teams/${teamId}/duet/member2/name`] = name.trim();
+          updates[`event/teams/${teamId}/duet/member2/memberId`] = contestantId.trim();
+        }
+      }
+    }
+
+    try {
+      await update(ref(db), updates);
+      alert("Contestant details updated successfully.");
+      render();
+    } catch (error) {
+      alert("Could not update the contestant details.\n\n" + error.message);
+    }
+    return;
+  }
+
+  if (performance.category === "Duet" || type === "Duet") {
+    const song = prompt("Duet Song:", performance.song || "");
+    if (song === null) return;
+    if (!song.trim()) { alert("The duet song cannot be blank."); return; }
+    const updates = { [`event/contestants/${id}/song`]: song.trim() };
+    if (performance.teamId) {
+      updates[`event/teams/${performance.teamId}/duet/song`] = song.trim();
+    }
+    try {
+      await update(ref(db), updates);
+      alert("Duet song updated successfully.");
+      render();
+    } catch (error) {
+      alert("Could not update the duet.\n\n" + error.message);
+    }
+  }
+}
+
 async function deletePerformance(
   id
 ) {
@@ -4211,6 +4395,7 @@ function wire() {
     ?.addEventListener("click", saveCompetitionDetails);
   document.getElementById("saveJudgePasswords")?.addEventListener("click", saveJudgePasswords);
   document.getElementById("saveBonusPoints")?.addEventListener("click", saveBonusPoints);
+  document.getElementById("saveIndividualRoundCount")?.addEventListener("click", saveIndividualRoundCount);
   /* =======================================================
      COMPETITION TYPE
      ======================================================= */
@@ -4457,30 +4642,6 @@ function wire() {
       }
     );
   /* =======================================================
-     INDIVIDUAL ROUND COUNT
-     ======================================================= */
-  const individualRoundCount = document.getElementById("individualRoundCount");
-  const individualSong2 = document.getElementById("individualSong2");
-  const individualRoundHelp = document.getElementById("individualRoundHelp");
-  if (individualRoundCount) {
-    const syncIndividualRoundFields = () => {
-      const twoRounds = Number(individualRoundCount.value) === 2;
-      if (individualSong2) {
-        individualSong2.disabled = !twoRounds;
-        individualSong2.required = twoRounds;
-        individualSong2.style.opacity = twoRounds ? "1" : "0.55";
-        individualSong2.placeholder = twoRounds ? "Round 2 Song" : "Round 2 Song (not required)";
-      }
-      if (individualRoundHelp) {
-        individualRoundHelp.textContent = twoRounds
-          ? "For 2 rounds, enter two different songs. Both rounds must be completed before the final result is complete."
-          : "For 1 round, only Round 1 Song is required. The completed Round 1 score becomes the final base score.";
-      }
-    };
-    individualRoundCount.addEventListener("change", syncIndividualRoundFields);
-    syncIndividualRoundFields();
-  }
-  /* =======================================================
      ADD INDIVIDUAL
      ======================================================= */
   document
@@ -4502,6 +4663,12 @@ function wire() {
       "click",
       saveDrawNumbers
     );
+  /* =======================================================
+     EDIT REGISTERED PERFORMANCES
+     ======================================================= */
+  document.querySelectorAll(".edit-performance").forEach(button => {
+    button.addEventListener("click", () => editPerformance(button.dataset.id));
+  });
   /* =======================================================
      DELETE PERFORMANCES
      ======================================================= */
