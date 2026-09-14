@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.5";
+const APP_VERSION = "1.5.6";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -68,6 +68,9 @@ function bonusPoints() {
 }
 function individualRoundCount() {
   return Number(D.individualRoundCount) === 1 ? 1 : 2;
+}
+function individualDuetEnabled() {
+  return D.individualDuetEnabled === true;
 }
 function performanceBonus(performance) {
   return performance?.bonusEligible === true ? bonusPoints() : 0;
@@ -371,6 +374,7 @@ async function initializeEvent() {
         activeCriteria: DEFAULT_CRITERIA.map(x => [...x]),
         bonusPoints: 0,
         individualRoundCount: 2,
+        individualDuetEnabled: false,
         judgePasswords: {}
       }
     );
@@ -425,6 +429,9 @@ async function initializeEvent() {
   }
   if (![1, 2].includes(Number(event.individualRoundCount))) {
     updates["event/individualRoundCount"] = 2;
+  }
+  if (event.individualDuetEnabled === undefined || event.individualDuetEnabled === null) {
+    updates["event/individualDuetEnabled"] = false;
   }
   if (event.bonusPoints === undefined || event.bonusPoints === null || !Number.isFinite(Number(event.bonusPoints))) {
     updates[
@@ -667,6 +674,20 @@ function settingsCard() {
         <button id="saveIndividualRoundCount" class="primary" type="button" ${locked ? "disabled" : ""}>SAVE INDIVIDUAL ROUND SETTING</button>
         <p><strong>Current setting: ${individualRoundCount()} Round${individualRoundCount() === 1 ? "" : "s"} for all individual contestants</strong></p>
       ` : ""}
+      ${!isTeamMode() ? `
+        <hr>
+        <h3>🎤 Individual Competition — Duet Segment</h3>
+        <p class="muted">Optional. If enabled, two people may be registered as a separate duet performance in this same individual competition. They do not have to compete as individuals, and their duet score is kept completely separate from individual scores.</p>
+        <div class="form-grid">
+          <select id="individualDuetEnabled" ${locked ? "disabled" : ""}>
+            <option value="no" ${!individualDuetEnabled() ? "selected" : ""}>Duet Segment OFF</option>
+            <option value="yes" ${individualDuetEnabled() ? "selected" : ""}>Duet Segment ON</option>
+          </select>
+        </div>
+        <br>
+        <button id="saveIndividualDuetSetting" class="primary" type="button" ${locked ? "disabled" : ""}>SAVE DUET SEGMENT SETTING</button>
+        <p><strong>Current setting: ${individualDuetEnabled() ? "Duet Segment ON" : "Duet Segment OFF"}</strong></p>
+      ` : ""}
       <hr>
       <p><b>Number of Judges</b></p>
       <div class="login-grid">
@@ -829,6 +850,20 @@ async function saveIndividualRoundCount() {
     render();
   } catch (error) {
     alert("The individual round setting could not be saved.\n\n" + error.message);
+  }
+}
+async function saveIndividualDuetSetting() {
+  if (criteriaLocked()) {
+    alert("The individual duet setting is locked after registration or scoring starts. Start a new competition before changing it.");
+    return;
+  }
+  const enabled = document.getElementById("individualDuetEnabled")?.value === "yes";
+  try {
+    await set(ref(db, "event/individualDuetEnabled"), enabled);
+    alert(`Individual duet segment ${enabled ? "enabled" : "disabled"} for this competition.`);
+    render();
+  } catch (error) {
+    alert("The individual duet setting could not be saved.\n\n" + error.message);
   }
 }
 /* =========================================================
@@ -1466,6 +1501,27 @@ function individualRegistration() {
     </div>
   `;
 }
+
+/* =========================================================
+   INDIVIDUAL COMPETITION DUET REGISTRATION
+   ========================================================= */
+function individualDuetRegistration() {
+  if (!individualDuetEnabled()) return "";
+  return `
+    <div class="card">
+      <h2>🎤 Register Individual Competition Duet</h2>
+      <p class="muted">Register any two people as a separate duet entry in this individual competition. They do <strong>not</strong> have to be registered as individual contestants. If they are also individual contestants, their individual scores remain completely separate from the duet score.</p>
+      <div class="form-grid">
+        <input id="individualDuetId1" placeholder="Person 1 ID / Number" maxlength="30">
+        <input id="individualDuetName1" placeholder="Person 1 / Stage Name" maxlength="100">
+        <input id="individualDuetId2" placeholder="Person 2 ID / Number" maxlength="30">
+        <input id="individualDuetName2" placeholder="Person 2 / Stage Name" maxlength="100">
+        <input id="individualDuetSong" placeholder="Duet Song" maxlength="150" style="grid-column:1/-1">
+      </div>
+      <br><button id="addIndividualDuet" class="primary" type="button">REGISTER DUET</button>
+    </div>
+  `;
+}
 /* =========================================================
    DRAW NUMBER SECTION
    ========================================================= */
@@ -1817,6 +1873,7 @@ function cont() {
       ${existingTeams()}
     ` : `
       ${individualRegistration()}
+      ${individualDuetRegistration()}
     `}
     ${drawNumbers()}
     ${registeredPerformances()}
@@ -2223,6 +2280,11 @@ function individualResults() {
   const ranked = rows.filter(x => x.complete).sort((a,b) => b.finalScore - a.finalScore);
   const winner = ranked[0];
   const maxFinal = 100 + bonusPoints();
+  const duetRows = cs().filter(x => x.individualDuet === true && x.performerType === "Duet").map(x => { const result = performanceResult(x.id); return { ...x, ...result, finalScore: result.complete ? result.avg : 0 }; }).sort((a,b) => b.finalScore - a.finalScore);
+  const duetRanked = duetRows.filter(x => x.complete);
+  const duetWinner = duetRanked[0];
+  const duetWinnerCard = individualDuetEnabled() ? `<div class="card winner"><span class="muted">🏆 TOP INDIVIDUAL COMPETITION DUET</span><h2>${duetWinner ? `${E(duetWinner.name)} & ${E(duetWinner.name2 || "")}` : "—"}</h2><div class="big">${duetWinner ? duetWinner.finalScore.toFixed(2) : "—"}</div><p>${duetWinner ? "/100" : "No completed duet yet."}</p></div>` : "";
+  const duetResultsCard = individualDuetEnabled() ? `<div class="card table-wrap"><h2>Duet Segment Results</h2><p class="muted">Duet scores are separate from all individual contestant scores. A duet participant does not need an individual entry.</p><table><tr><th>Rank</th><th>Duet</th><th>Song</th><th>Judges</th><th>Score</th><th>Status</th></tr>${duetRows.map(x => `<tr><td>${x.complete ? duetRanked.findIndex(r => r.id === x.id)+1 : "—"}</td><td><strong>${E(x.name)} & ${E(x.name2 || "")}</strong></td><td>${E(x.song || "")}</td><td>${x.submitted}/${judgeCount()}</td><td><strong>${x.complete ? x.finalScore.toFixed(2) : "—"}</strong> /100</td><td>${x.complete ? '<span class="ok">COMPLETE</span>' : '<span class="warn">PENDING</span>'}</td></tr>`).join("") || `<tr><td colspan="6">No duets registered.</td></tr>`}</table></div>` : "";
   const winnerCard = winner ? `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>${E(winner.name)}</h2><p>${E(winner.contestantId)} · ${E(winner.gender)} · ${winner.expectedRounds} round${winner.expectedRounds === 1 ? "" : "s"}</p><div class="big">${winner.finalScore.toFixed(2)}</div><p>/${maxFinal} final score${winner.bonus ? ` · includes +${winner.bonus} bonus` : ""}</p></div>` : `<div class="card winner"><span class="muted">🏆 INDIVIDUAL CHAMPION</span><h2>—</h2><p>No contestant has completed the required round(s) yet.</p></div>`;
   return `
     <h1>Individual Competition Results — 1 or 2 Rounds</h1>
@@ -2230,8 +2292,9 @@ function individualResults() {
       <button id="printResults" class="primary" type="button">🖨️ PRINT RESULTS</button>
       <button id="saveResults" type="button">💾 SAVE RESULTS (CSV)</button>
     </div>
-    <div class="grid">${winnerCard}<div class="card"><span class="muted">COMPLETED CONTESTANTS</span><div class="stat">${ranked.length}/${rows.length}</div><p>Required round(s) completed</p></div></div>
+    <div class="grid">${winnerCard}${duetWinnerCard}<div class="card"><span class="muted">COMPLETED CONTESTANTS</span><div class="stat">${ranked.length}/${rows.length}</div><p>Required round(s) completed</p></div></div>
     <div class="card table-wrap"><h2>Final Individual Ranking</h2><p class="muted">For a 1-round contestant, the completed Round 1 score is the final base score. For a 2-round contestant, the two completed round scores are averaged. The early-registration bonus, if awarded, is added once. Judging is out of 100; final score can be up to ${maxFinal} with a +${bonusPoints()} bonus.</p><table><tr><th>Rank</th><th>Contestant</th><th>ID</th><th>Gender</th><th>Rounds</th><th>Round 1</th><th>Round 2</th><th>Bonus</th><th>Final Score</th><th>Status</th></tr>${rows.sort((a,b) => (b.complete-a.complete) || (b.finalScore-a.finalScore)).map(x => `<tr><td>${x.complete ? ranked.findIndex(r => r.id === x.id)+1 : "—"}</td><td><strong>${E(x.name)}</strong></td><td>${E(x.contestantId)}</td><td>${E(x.gender)}</td><td>${x.expectedRounds}</td><td>${x.r1?.result.complete ? x.r1.result.avg.toFixed(2) : "—"}</td><td>${x.expectedRounds === 2 && x.r2?.result.complete ? x.r2.result.avg.toFixed(2) : "—"}</td><td>${x.bonus ? `+${x.bonus}` : "—"}</td><td><strong>${x.complete ? x.finalScore.toFixed(2) : "—"}</strong> /${maxFinal}</td><td>${x.complete ? '<span class="ok">COMPLETE</span>' : '<span class="warn">PENDING</span>'}</td></tr>`).join("")}</table></div>
+    ${duetResultsCard}
   `;
 }
 function saveIndividualResults() {
@@ -2248,6 +2311,7 @@ function saveIndividualResults() {
   lines.push(["Competition",D.name||"","Venue",D.venue||""]); lines.push(["Date",D.date||"","Judges",judgeCount()]); lines.push(["Bonus Points",bonusPoints(),"Final Maximum",100+bonusPoints()]); lines.push([]);
   lines.push(["Rank","Contestant ID","Contestant","Gender","Rounds","Round 1","Round 2","Bonus","Final Score","Status"]);
   let rank=0; rows.forEach(x=>{if(x.complete) rank++; lines.push([x.complete?rank:"",x.id,x.name,x.gender,x.expectedRounds,x.complete?x.r1.toFixed(2):"",x.expectedRounds===2&&x.complete?x.r2.toFixed(2):"",x.complete?`+${x.bonus}`:"",x.complete?x.final.toFixed(2):"",x.complete?"COMPLETE":"PENDING"]);});
+  if (individualDuetEnabled()) { lines.push([]); lines.push(["DUET SEGMENT RESULTS"]); lines.push(["Rank","Performer 1","Performer 2","Song","Judges","Score","Status"]); let dr=0; cs().filter(x=>x.individualDuet===true&&x.performerType==="Duet").map(x=>({...x,...performanceResult(x.id)})).sort((a,b)=>(b.complete-b.complete)||((b.avg||0)-(a.avg||0))).forEach(x=>{if(x.complete)dr++; lines.push([x.complete?dr:"",x.name,x.name2||"",x.song||"",`${x.submitted}/${judgeCount()}`,x.complete?Number(x.avg||0).toFixed(2):"",x.complete?"COMPLETE":"PENDING"]);}); }
   lines.push([]); lines.push(["Judging Criteria","Maximum Points"]); C.forEach(x=>lines.push([x[1],x[2]])); lines.push([]); lines.push(["Exported",new Date().toLocaleString()]);
   const csv=lines.map(row=>row.map(csvCell).join(",")).join("\r\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const link=document.createElement("a"); const safeName=String(D.name||"Royal_Karaoke_SKN").replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"")||"Royal_Karaoke_SKN"; link.href=url; link.download=`${safeName}_Individual_Results.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
@@ -3528,6 +3592,31 @@ async function addDuet() {
   }
 }
 /* =========================================================
+   ADD INDIVIDUAL COMPETITION DUET
+   ========================================================= */
+async function addIndividualDuet() {
+  if (!individualDuetEnabled()) { alert("The Individual Competition Duet Segment is currently OFF."); return; }
+  const id1 = document.getElementById("individualDuetId1")?.value.trim();
+  const name1 = document.getElementById("individualDuetName1")?.value.trim();
+  const id2 = document.getElementById("individualDuetId2")?.value.trim();
+  const name2 = document.getElementById("individualDuetName2")?.value.trim();
+  const song = document.getElementById("individualDuetSong")?.value.trim();
+  if (!id1 || !name1 || !id2 || !name2 || !song) { alert("Enter both performers' IDs/numbers, both names, and the duet song."); return; }
+  if (id1.toLowerCase() === id2.toLowerCase()) { alert("The two duet members must have different IDs/numbers."); return; }
+  const pairExists = cs().some(x => x.performerType === "Duet" && x.individualDuet === true && Array.isArray(x.contestantIds) && x.contestantIds.length === 2 && new Set(x.contestantIds.map(v => String(v).toLowerCase())).size === 2 && x.contestantIds.map(v => String(v).toLowerCase()).sort().join("|") === [id1,id2].map(v => v.toLowerCase()).sort().join("|"));
+  if (pairExists) { alert("That duet is already registered."); return; }
+  try {
+    const performanceRef = push(ref(db, "event/contestants"));
+    await set(performanceRef, {
+      number: null, order: null, name: name1, name2, category: "Duet", song,
+      teamId: "", team: "", memberIds: [], contestantIds: [id1, id2],
+      performerType: "Duet", performanceType: "Duet", individualDuet: true, createdAt: Date.now()
+    });
+    alert(`Individual competition duet registered successfully:\n\n${name1} & ${name2}\nSong: ${song}`);
+    render();
+  } catch (error) { alert("Could not register individual competition duet.\n\n" + error.message); }
+}
+/* =========================================================
    ADD INDIVIDUAL — TWO ROUNDS
    ========================================================= */
 async function addIndividual() {
@@ -3704,67 +3793,35 @@ async function saveDrawNumbers() {
    ========================================================= */
 async function editPerformance(id) {
   const performance = D.contestants?.[id];
-  if (!performance) {
-    alert("That registered performance could not be found.");
-    return;
-  }
+  if (!performance) { alert("That registered performance could not be found."); return; }
   const scoreStarted = !!S()[id] && Object.keys(S()[id] || {}).length > 0;
   if (scoreStarted || D.active === id) {
     alert("This performance can no longer be edited because scoring has started. Edit performers before their performance is activated.");
     return;
   }
-
   const type = performance.performerType || performance.performanceType || "";
   const isIndividual = type === "Individual" && performance.category !== "Duet";
-
   if (isIndividual) {
     const groupId = performance.individualGroupId || id;
-    const records = cs().filter(x =>
-      (x.individualGroupId || x.id) === groupId &&
-      (x.performerType || x.performanceType) === "Individual"
-    );
+    const records = cs().filter(x => (x.individualGroupId || x.id) === groupId && (x.performerType || x.performanceType) === "Individual");
     const rows = records.length ? records : [performance];
     const first = rows.find(x => Number(x.round) === 1) || performance;
     const second = rows.find(x => Number(x.round) === 2);
-
-    const name = prompt("Contestant / Stage Name:", first.name || "");
-    if (name === null) return;
-    if (!name.trim()) { alert("The contestant / stage name cannot be blank."); return; }
-
-    const gender = prompt("Gender (Male or Female):", first.category || "");
-    if (gender === null) return;
+    const name = prompt("Contestant / Stage Name:", first.name || ""); if (name === null) return;
+    const gender = prompt("Gender (Male or Female):", first.category || ""); if (gender === null) return;
+    const contestantId = prompt("Contestant ID / Number:", first.contestantId || ""); if (contestantId === null) return;
+    const song1 = prompt("Round 1 Song:", first.song || ""); if (song1 === null) return;
+    if (!name.trim() || !contestantId.trim() || !song1.trim()) { alert("Name, Contestant ID / Number and Round 1 Song cannot be blank."); return; }
     if (!["Male", "Female"].includes(gender.trim())) { alert("Gender must be Male or Female."); return; }
-
-    const contestantId = prompt("Contestant ID / Number:", first.contestantId || "");
-    if (contestantId === null) return;
-    if (!contestantId.trim()) { alert("The Contestant ID / Number cannot be blank."); return; }
-
-    const song1 = prompt("Round 1 Song:", first.song || "");
-    if (song1 === null) return;
-    if (!song1.trim()) { alert("Round 1 Song cannot be blank."); return; }
-
     let song2 = "";
     if (second) {
-      song2 = prompt("Round 2 Song:", second.song || "");
-      if (song2 === null) return;
+      song2 = prompt("Round 2 Song:", second.song || ""); if (song2 === null) return;
       if (!song2.trim()) { alert("Round 2 Song cannot be blank."); return; }
-      if (song1.trim().toLowerCase() === song2.trim().toLowerCase()) {
-        alert("Round 1 and Round 2 must use two different songs.");
-        return;
-      }
+      if (song1.trim().toLowerCase() === song2.trim().toLowerCase()) { alert("Round 1 and Round 2 must use two different songs."); return; }
     }
-
     const normalizedId = contestantId.trim().toLowerCase();
-    const duplicate = cs().some(x =>
-      (x.id !== id) &&
-      (x.individualGroupId || x.id) !== groupId &&
-      String(x.contestantId || "").trim().toLowerCase() === normalizedId
-    );
-    if (duplicate) {
-      alert(`Contestant ID "${contestantId.trim()}" is already registered.`);
-      return;
-    }
-
+    const duplicate = cs().some(x => x.id !== id && (x.individualGroupId || x.id) !== groupId && String(x.contestantId || "").trim().toLowerCase() === normalizedId);
+    if (duplicate) { alert(`Contestant ID "${contestantId.trim()}" is already registered.`); return; }
     const updates = {};
     for (const row of rows) {
       updates[`event/contestants/${row.id}/name`] = name.trim();
@@ -3772,68 +3829,40 @@ async function editPerformance(id) {
       updates[`event/contestants/${row.id}/contestantId`] = contestantId.trim();
       updates[`event/contestants/${row.id}/song`] = Number(row.round) === 2 ? song2.trim() : song1.trim();
     }
-
-    // If this is a team member, keep the team roster and related duet names/IDs synchronized.
     if (performance.teamId && Array.isArray(performance.memberIds) && performance.memberIds.length === 1) {
-      const teamId = performance.teamId;
-      const memberKey = performance.memberIds[0];
+      const teamId = performance.teamId, memberKey = performance.memberIds[0];
       updates[`event/teams/${teamId}/members/${memberKey}/name`] = name.trim();
       updates[`event/teams/${teamId}/members/${memberKey}/gender`] = gender.trim();
       updates[`event/teams/${teamId}/members/${memberKey}/memberId`] = contestantId.trim();
       updates[`event/teams/${teamId}/members/${memberKey}/song`] = song1.trim();
-
-      const team = D.teams?.[teamId];
-      const duetId = team?.performanceIds?.duet;
-      const duet = duetId ? D.contestants?.[duetId] : null;
+      const team = D.teams?.[teamId], duetId = team?.performanceIds?.duet, duet = duetId ? D.contestants?.[duetId] : null;
       if (duet && Array.isArray(duet.memberIds) && duet.memberIds.includes(memberKey)) {
         const ids = Array.isArray(duet.contestantIds) ? [...duet.contestantIds] : [];
-        const oldMemberId = performance.contestantId;
-        const pos = ids.indexOf(oldMemberId);
-        if (pos >= 0) ids[pos] = contestantId.trim();
+        const oldMemberId = performance.contestantId, pos = ids.indexOf(oldMemberId); if (pos >= 0) ids[pos] = contestantId.trim();
         updates[`event/contestants/${duetId}/contestantIds`] = ids;
-        if (duet.memberIds[0] === memberKey) {
-          updates[`event/contestants/${duetId}/name`] = name.trim();
-        }
-        if (duet.memberIds[1] === memberKey) {
-          updates[`event/contestants/${duetId}/name2`] = name.trim();
-        }
-        if (team.duet?.member1?.memberKey === memberKey) {
-          updates[`event/teams/${teamId}/duet/member1/name`] = name.trim();
-          updates[`event/teams/${teamId}/duet/member1/memberId`] = contestantId.trim();
-        }
-        if (team.duet?.member2?.memberKey === memberKey) {
-          updates[`event/teams/${teamId}/duet/member2/name`] = name.trim();
-          updates[`event/teams/${teamId}/duet/member2/memberId`] = contestantId.trim();
-        }
+        if (duet.memberIds[0] === memberKey) updates[`event/contestants/${duetId}/name`] = name.trim();
+        if (duet.memberIds[1] === memberKey) updates[`event/contestants/${duetId}/name2`] = name.trim();
+        if (team.duet?.member1?.memberKey === memberKey) { updates[`event/teams/${teamId}/duet/member1/name`] = name.trim(); updates[`event/teams/${teamId}/duet/member1/memberId`] = contestantId.trim(); }
+        if (team.duet?.member2?.memberKey === memberKey) { updates[`event/teams/${teamId}/duet/member2/name`] = name.trim(); updates[`event/teams/${teamId}/duet/member2/memberId`] = contestantId.trim(); }
       }
     }
-
-    try {
-      await update(ref(db), updates);
-      alert("Contestant details updated successfully.");
-      render();
-    } catch (error) {
-      alert("Could not update the contestant details.\n\n" + error.message);
-    }
+    try { await update(ref(db), updates); alert("Contestant details updated successfully."); render(); } catch (error) { alert("Could not update the contestant details.\n\n" + error.message); }
     return;
   }
-
   if (performance.category === "Duet" || type === "Duet") {
-    const song = prompt("Duet Song:", performance.song || "");
-    if (song === null) return;
-    if (!song.trim()) { alert("The duet song cannot be blank."); return; }
-    const updates = { [`event/contestants/${id}/song`]: song.trim() };
-    if (performance.teamId) {
-      updates[`event/teams/${performance.teamId}/duet/song`] = song.trim();
-    }
-    try {
-      await update(ref(db), updates);
-      alert("Duet song updated successfully.");
-      render();
-    } catch (error) {
-      alert("Could not update the duet.\n\n" + error.message);
-    }
+    const name1 = prompt("First Duet Performer / Stage Name:", performance.name || ""); if (name1 === null) return;
+    const name2 = prompt("Second Duet Performer / Stage Name:", performance.name2 || ""); if (name2 === null) return;
+    const song = prompt("Duet Song:", performance.song || ""); if (song === null) return;
+    const id1 = prompt("First Duet Performer ID / Number:", performance.contestantIds?.[0] || ""); if (id1 === null) return;
+    const id2 = prompt("Second Duet Performer ID / Number:", performance.contestantIds?.[1] || ""); if (id2 === null) return;
+    if (!name1.trim() || !name2.trim() || !song.trim() || !id1.trim() || !id2.trim()) { alert("Both names, both IDs/numbers and the duet song are required."); return; }
+    if (id1.trim().toLowerCase() === id2.trim().toLowerCase()) { alert("The two duet members must have different IDs/numbers."); return; }
+    const updates = { [`event/contestants/${id}/name`]: name1.trim(), [`event/contestants/${id}/name2`]: name2.trim(), [`event/contestants/${id}/song`]: song.trim(), [`event/contestants/${id}/contestantIds`]: [id1.trim(), id2.trim()] };
+    if (performance.teamId) updates[`event/teams/${performance.teamId}/duet/song`] = song.trim();
+    try { await update(ref(db), updates); alert("Duet details updated successfully."); render(); } catch (error) { alert("Could not update the duet.\n\n" + error.message); }
+    return;
   }
+  alert("This performance type cannot be edited from this page.");
 }
 
 async function deletePerformance(
@@ -4396,6 +4425,7 @@ function wire() {
   document.getElementById("saveJudgePasswords")?.addEventListener("click", saveJudgePasswords);
   document.getElementById("saveBonusPoints")?.addEventListener("click", saveBonusPoints);
   document.getElementById("saveIndividualRoundCount")?.addEventListener("click", saveIndividualRoundCount);
+  document.getElementById("saveIndividualDuetSetting")?.addEventListener("click", saveIndividualDuetSetting);
   /* =======================================================
      COMPETITION TYPE
      ======================================================= */
@@ -4641,6 +4671,7 @@ function wire() {
         }
       }
     );
+  document.getElementById("addIndividualDuet")?.addEventListener("click", addIndividualDuet);
   /* =======================================================
      ADD INDIVIDUAL
      ======================================================= */
