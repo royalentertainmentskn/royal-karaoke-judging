@@ -15,7 +15,7 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.6";
+const APP_VERSION = "1.5.7";
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -2428,6 +2428,53 @@ function results() {
   /* =======================================================
      WINNER CARD
      ======================================================= */
+  const maleRanking = completeRows
+    .filter(x => x.category === "Male")
+    .slice()
+    .sort(sortByScore);
+  const femaleRanking = completeRows
+    .filter(x => x.category === "Female")
+    .slice()
+    .sort(sortByScore);
+  const duetRanking = completeRows
+    .filter(x => x.category === "Duet")
+    .slice()
+    .sort(sortByScore);
+
+  const categoryRankingTable = (title, list, duet = false) => `
+    <div class="card table-wrap">
+      <h2>🏆 ${E(title)} — Top 3</h2>
+      <table>
+        <tr>
+          <th>Position</th>
+          <th>${duet ? "Duet" : "Contestant"}</th>
+          <th>#</th>
+          ${isTeamMode() ? "<th>Team</th>" : ""}
+          <th>Score</th>
+        </tr>
+        ${list.slice(0, 3).map((x, i) => `
+          <tr>
+            <td><strong>${i + 1}${i === 0 ? " 🥇" : i === 1 ? " 🥈" : " 🥉"}</strong></td>
+            <td><strong>${E(x.name)}${duet && x.name2 ? `<br>& ${E(x.name2)}` : ""}</strong></td>
+            <td>${hasDrawNumber(x) ? E(x.number) : "—"}</td>
+            ${isTeamMode() ? `<td>${E(getContestantTeam(x) || "Unassigned")}</td>` : ""}
+            <td><strong>${x.finalScore.toFixed(2)}</strong> /${100 + bonusPoints()}</td>
+          </tr>
+        `).join("") || `<tr><td colspan="${isTeamMode() ? 5 : 4}">No completed ${E(title.toLowerCase())} yet.</td></tr>`}
+      </table>
+    </div>
+  `;
+
+  const categoryRankings = `
+    <div class="grid">
+      ${categoryRankingTable("Male Ranking", maleRanking)}
+      ${categoryRankingTable("Female Ranking", femaleRanking)}
+    </div>
+    <div class="grid">
+      ${categoryRankingTable("Duet Ranking", duetRanking, true)}
+    </div>
+  `;
+
   const winnerCard = (
     title,
     winner
@@ -2662,6 +2709,8 @@ function results() {
         `
         : ""
     }
+    <!-- CATEGORY RANKINGS -->
+    ${categoryRankings}
     <!-- PERFORMANCE RESULTS -->
     <div class="card table-wrap">
       <h2>
