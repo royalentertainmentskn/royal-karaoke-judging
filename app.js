@@ -15,7 +15,11 @@ import {
   signInAnonymously
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-const APP_VERSION = "1.5.7";
+const APP_VERSION = "1.5.8";
+const RK_LOGO_SRC = "rkskn-logo.png";
+function rkLogo(className = "") {
+  return `<img class="rk-logo ${className}" src="${RK_LOGO_SRC}" alt="Royal Karaoke SKN logo">`;
+}
 const DEFAULT_CRITERIA = [
   ["voiceManagement", "Voice Management", 10],
   ["voiceTiming", "Voice Timing", 20],
@@ -541,13 +545,13 @@ async function start() {
 function head() {
   return `
     <div class="top">
-      <b>
-        🎤 ROYAL KARAOKE SKN
-        <br>
-        <small>
-          DIGITAL JUDGING SYSTEM
-        </small>
-      </b>
+      <div class="brand-lockup">
+        ${rkLogo("header-logo")}
+        <div class="brand-copy">
+          <span class="brand-title">Royal Karaoke SKN</span>
+          <span class="brand-subtitle">Digital Judging System</span>
+        </div>
+      </div>
       <span class="pill">
         ${
           role === "auditor"
@@ -569,7 +573,7 @@ function login() {
     return `
       <div class="wrap">
         <div class="card hero">
-          <div class="big">🎤</div>
+          ${rkLogo("hero-logo")}
           <h1>Royal Karaoke SKN</h1>
           <h2>100-Point Digital Judging System</h2>
           <p class="muted">${E(competitionTypeLabel())}</p>
@@ -585,7 +589,7 @@ function login() {
   return `
     <div class="wrap">
       <div class="card hero">
-        <div class="big">🎤</div>
+        ${rkLogo("hero-logo")}
         <h1>Royal Karaoke SKN</h1>
         <h2>Judge Login</h2>
         <p class="muted">${E(competitionTypeLabel())} · ${judgeCount()} Judges</p>
@@ -676,7 +680,7 @@ function settingsCard() {
       ` : ""}
       ${!isTeamMode() ? `
         <hr>
-        <h3>🎤 Individual Competition — Duet Segment</h3>
+        <h3>🎵 Individual Competition — Duet Segment</h3>
         <p class="muted">Optional. If enabled, two people may be registered as a separate duet performance in this same individual competition. They do not have to compete as individuals, and their duet score is kept completely separate from individual scores.</p>
         <div class="form-grid">
           <select id="individualDuetEnabled" ${locked ? "disabled" : ""}>
@@ -1222,7 +1226,7 @@ function teamRegistration() {
       </div>
       <br>
       <div class="card">
-        <h3>🎤 Team Duet</h3>
+        <h3>🎵 Team Duet</h3>
         <p class="muted">
           Select two different members from the five above and register the one duet song.
         </p>
@@ -1417,7 +1421,7 @@ function duetRegistration() {
   return `
     <div class="card">
       <h2>
-        🎤 Register Team Duet
+        🎵 Register Team Duet
       </h2>
       <p class="muted">
         Select two members from the same team.
@@ -1472,7 +1476,7 @@ function individualRegistration() {
   const rounds = individualRoundCount();
   return `
     <div class="card">
-      <h2>🎤 Register Individual Contestant — ${rounds} Round${rounds === 1 ? "" : "s"}</h2>
+      <h2>🎵 Register Individual Contestant — ${rounds} Round${rounds === 1 ? "" : "s"}</h2>
       <p class="muted">
         The competition is set to <strong>${rounds} Round${rounds === 1 ? "" : "s"}</strong> for all individual contestants.
         ${rounds === 2
@@ -1509,7 +1513,7 @@ function individualDuetRegistration() {
   if (!individualDuetEnabled()) return "";
   return `
     <div class="card">
-      <h2>🎤 Register Individual Competition Duet</h2>
+      <h2>🎵 Register Individual Competition Duet</h2>
       <p class="muted">Register any two people as a separate duet entry in this individual competition. They do <strong>not</strong> have to be registered as individual contestants. If they are also individual contestants, their individual scores remain completely separate from the duet score.</p>
       <div class="form-grid">
         <input id="individualDuetId1" placeholder="Person 1 ID / Number" maxlength="30">
@@ -2880,9 +2884,7 @@ function judge() {
     return `
       <div class="wrap">
         <div class="card hero">
-          <div class="big">
-            🎤
-          </div>
+          ${rkLogo("hero-logo")}
           <h1>
             Waiting for Auditor
           </h1>
@@ -4788,7 +4790,7 @@ function render() {
     root.innerHTML = `
       <div class="wrap">
         <div class="card hero">
-          <div class="big">🎤</div>
+          ${rkLogo("loading-logo")}
           <h2>Loading Royal Karaoke SKN...</h2>
         </div>
       </div>
